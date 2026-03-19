@@ -4,3 +4,9 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+anyhow = "1.0.102"
+bitcode = "0.6.9"
+iroh = { workspace = true }
+n0-future = "0.3.2"
+serde = { workspace = true }
+tokio = { workspace = true }

@@ -4,6 +4,9 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+anyhow = { workspace = true }
 axum = { version = "0.8.8", features = ["macros"] }
-serde = { version = "1.0.228", features = ["derive"] }
-tokio = { version = "1.50.0", features = ["macros", "rt-multi-thread"] }
+common = { path = "../common/" }
+iroh = { workspace = true }
+serde = { workspace = true }
+tokio = { workspace = true }
