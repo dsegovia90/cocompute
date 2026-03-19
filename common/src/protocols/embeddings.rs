@@ -1,5 +1,6 @@
 use bitcode::{Decode, Encode};
 use iroh::protocol::AcceptError;
+use ollama_rs::{Ollama, generation::embeddings::request::GenerateEmbeddingsRequest};
 use serde::{Deserialize, Serialize};
 
 use crate::helpers::{read_p2p, write_p2p};
@@ -18,11 +19,11 @@ pub struct EmbeddingsRequest {
 
 #[derive(Debug, Encode, Decode, Serialize)]
 pub struct EmbeddingsResponse {
-    embeddings: Vec<f64>,
+    embeddings: Vec<f32>,
 }
 
 impl EmbeddingsResponse {
-    pub fn new(embeddings: Vec<f64>) -> Self {
+    pub fn new(embeddings: Vec<f32>) -> Self {
         Self { embeddings }
     }
 }
@@ -50,7 +51,14 @@ impl iroh::protocol::ProtocolHandler for Embeddings {
             let req: EmbeddingsRequest = read_p2p(recv).await.unwrap();
             println!("embedding text: {}", req.text);
 
-            write_p2p(send, EmbeddingsResponse { embeddings: vec![] })
+            let request = GenerateEmbeddingsRequest::new(
+                "mxbai-embed-large:latest".to_string(),
+                req.text.into(),
+            );
+            let ollama = Ollama::new("http://192.168.1.51".to_string(), 11434);
+            let res = ollama.generate_embeddings(request).await.unwrap();
+
+            write_p2p(send, EmbeddingsResponse::new(res.embeddings[0].clone()))
                 .await
                 .unwrap();
 

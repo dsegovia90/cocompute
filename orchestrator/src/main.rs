@@ -47,7 +47,7 @@ async fn create_embeddings(
     Json(payload): Json<EmbeddingsRequest>,
 ) -> Json<EmbeddingsResponse> {
     let endpoint_id: EndpointId =
-        EndpointId::from_str("8f5030e8dd6102e6b224ecbc2d2693cb53999fd3e9c63773ec57e0f3c316dbd3")
+        EndpointId::from_str("f2ebd84cfc3db91a0cee90bed7c4bad66450eb7942f5541bd21b9706e8d0d46d")
             .unwrap();
     let address = EndpointAddr::from(endpoint_id);
     let response = connect_side(&endpoint, address, payload).await.unwrap();
