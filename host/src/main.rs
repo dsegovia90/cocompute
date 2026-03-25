@@ -257,7 +257,12 @@ fn load_or_create_secret_key(key_path: &PathBuf) -> anyhow::Result<iroh::SecretK
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    tracing_subscriber::fmt::init();
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
+        )
+        .init();
 
     let args = Args::parse();
     let key_path = expand_tilde(&args.key_path);
