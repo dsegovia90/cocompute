@@ -1,25 +1,25 @@
-use std::str::FromStr;
-
 use axum::{Json, Router, extract::State, middleware, routing::post};
 use clap::{Parser, Subcommand};
 use common::{
     helpers::{read_p2p, write_p2p},
     protocols::{self, Request, Response},
-    protocols::{
-        chat::{ChatRequest, ChatResponse},
-        embeddings::{EmbeddingsRequest, EmbeddingsResponse},
-    },
 };
 use error::AppError;
 use host_manager::HostManager;
 use iroh::{Endpoint, EndpointAddr, EndpointId};
+use openai::{
+    OpenAIChatChoice, OpenAIChatMessage, OpenAIChatRequest, OpenAIChatResponse,
+    OpenAIEmbeddingData, OpenAIEmbeddingsRequest, OpenAIEmbeddingsResponse, OpenAIUsage,
+};
 use sea_orm::{ActiveModelTrait, Database, DatabaseConnection, Set};
 use sea_orm_migration::MigratorTrait;
+use std::str::FromStr;
 
 mod auth;
 mod db;
 mod error;
 mod host_manager;
+mod openai;
 
 #[derive(Parser, Debug)]
 #[command(name = "cocompute-orchestrator")]
@@ -93,7 +93,6 @@ async fn main() -> anyhow::Result<()> {
             };
 
             let app = Router::new()
-                .route("/embeddings", post(create_embeddings))
                 .route("/v1/embeddings", post(create_embeddings))
                 .route("/v1/chat/completions", post(create_chat_completion))
                 .route_layer(middleware::from_fn_with_state(db, auth::require_api_key))
@@ -131,11 +130,11 @@ async fn send_to_host(
 
     write_p2p(send, request)
         .await
-        .map_err(|e| AppError::Internal(e))?;
+        .map_err(AppError::Internal)?;
 
     let response: Response = read_p2p(recv)
         .await
-        .map_err(|e| AppError::Internal(e))?;
+        .map_err(AppError::Internal)?;
 
     Ok(response)
 }
@@ -146,42 +145,102 @@ async fn route_to_host(
     model: &str,
     request: Request,
 ) -> Result<Response, AppError> {
-    let host = state
-        .hosts
-        .find_host_for_model(model)
-        .await
-        .ok_or_else(|| {
-            // No host has this model — collect available models for error
-            AppError::HostUnavailable
-        })?;
+    let host = state.hosts.find_host_for_model(model).await;
 
-    send_to_host(&state.endpoint, &host.endpoint_id, request).await
+    match host {
+        Some(h) => send_to_host(&state.endpoint, &h.endpoint_id, request).await,
+        None => {
+            let available = state.hosts.available_models().await;
+            if available.is_empty() {
+                Err(AppError::HostUnavailable)
+            } else {
+                Err(AppError::ModelNotFound { available })
+            }
+        }
+    }
 }
 
+/// POST /v1/embeddings — OpenAI-compatible embeddings endpoint.
 async fn create_embeddings(
     State(state): State<AppState>,
-    Json(payload): Json<EmbeddingsRequest>,
-) -> Result<Json<EmbeddingsResponse>, AppError> {
+    Json(payload): Json<OpenAIEmbeddingsRequest>,
+) -> Result<Json<OpenAIEmbeddingsResponse>, AppError> {
     let model = payload.model.clone();
-    let request = Request::Embeddings(payload);
+
+    // Translate OpenAI format → internal protocol
+    let internal_request = common::protocols::embeddings::EmbeddingsRequest {
+        model: payload.model,
+        text: payload.input,
+    };
+
+    let request = Request::Embeddings(internal_request);
     let response = route_to_host(&state, &model, request).await?;
 
     match response {
-        Response::Embeddings { result, .. } => Ok(Json(result)),
+        Response::Embeddings { result, metering } => {
+            // Translate internal → OpenAI format
+            Ok(Json(OpenAIEmbeddingsResponse {
+                object: "list",
+                data: vec![OpenAIEmbeddingData {
+                    object: "embedding",
+                    embedding: result.embeddings,
+                    index: 0,
+                }],
+                model,
+                usage: OpenAIUsage::from_metering(&metering),
+            }))
+        }
         _ => Err(AppError::Internal(anyhow::anyhow!("unexpected response type"))),
     }
 }
 
+/// POST /v1/chat/completions — OpenAI-compatible chat endpoint (non-streaming).
 async fn create_chat_completion(
     State(state): State<AppState>,
-    Json(payload): Json<ChatRequest>,
-) -> Result<Json<ChatResponse>, AppError> {
+    Json(payload): Json<OpenAIChatRequest>,
+) -> Result<Json<OpenAIChatResponse>, AppError> {
     let model = payload.model.clone();
-    let request = Request::Chat(payload);
+
+    // Translate OpenAI format → internal protocol
+    let internal_request = common::protocols::chat::ChatRequest {
+        model: payload.model,
+        messages: payload
+            .messages
+            .into_iter()
+            .map(|m| common::protocols::chat::ChatMessage {
+                role: m.role,
+                content: m.content,
+            })
+            .collect(),
+        temperature: payload.temperature,
+    };
+
+    let request = Request::Chat(internal_request);
     let response = route_to_host(&state, &model, request).await?;
 
     match response {
-        Response::Chat { result, .. } => Ok(Json(result)),
+        Response::Chat { result, metering } => {
+            let created = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs();
+
+            Ok(Json(OpenAIChatResponse {
+                id: format!("chatcmpl-{}", hex::encode(&created.to_be_bytes())),
+                object: "chat.completion",
+                created,
+                model,
+                choices: vec![OpenAIChatChoice {
+                    index: 0,
+                    message: OpenAIChatMessage {
+                        role: result.message.role,
+                        content: result.message.content,
+                    },
+                    finish_reason: "stop",
+                }],
+                usage: OpenAIUsage::from_metering(&metering),
+            }))
+        }
         _ => Err(AppError::Internal(anyhow::anyhow!("unexpected response type"))),
     }
 }
