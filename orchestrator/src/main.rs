@@ -5,19 +5,20 @@ use common::{
     protocols::{self, Metering, Request, Response},
 };
 use error::AppError;
+use host_acceptor::HostAcceptor;
 use host_manager::HostManager;
-use iroh::{Endpoint, EndpointAddr, EndpointId};
+use iroh::Endpoint;
 use openai::{
     OpenAIChatChoice, OpenAIChatMessage, OpenAIChatRequest, OpenAIChatResponse,
     OpenAIEmbeddingData, OpenAIEmbeddingsRequest, OpenAIEmbeddingsResponse, OpenAIUsage,
 };
 use sea_orm::{ActiveModelTrait, Database, DatabaseConnection, Set};
 use sea_orm_migration::MigratorTrait;
-use std::str::FromStr;
 
 mod auth;
 mod db;
 mod error;
+mod host_acceptor;
 mod host_manager;
 mod openai;
 
@@ -82,9 +83,16 @@ async fn main() -> anyhow::Result<()> {
             tracing::info!("database initialized at {}", args.db_path);
 
             let endpoint = Endpoint::bind(iroh::endpoint::presets::N0).await?;
-            tracing::info!("iroh endpoint: {:?}", endpoint.addr().id);
+            tracing::info!("orchestrator endpoint id: {:?}", endpoint.addr().id);
 
             let hosts = HostManager::new();
+
+            // Start iroh router to accept host connections
+            let acceptor = HostAcceptor::new(hosts.clone());
+            let _router = iroh::protocol::Router::builder(endpoint.clone())
+                .accept(protocols::ALPN, acceptor)
+                .spawn();
+            tracing::info!("accepting host connections on ALPN cocompute/0");
 
             let state = AppState {
                 endpoint,
@@ -109,22 +117,13 @@ async fn main() -> anyhow::Result<()> {
     }
 }
 
-/// Send a request to a host over iroh and get the response.
+/// Send a request to a host using its stored connection.
+/// Opens a new bi-stream on the existing connection.
 async fn send_to_host(
-    endpoint: &Endpoint,
-    endpoint_id: &str,
+    connection: &iroh::endpoint::Connection,
     request: Request,
 ) -> Result<Response, AppError> {
-    let id = EndpointId::from_str(endpoint_id)
-        .map_err(|e| AppError::Internal(anyhow::anyhow!("invalid endpoint id: {e}")))?;
-    let addr = EndpointAddr::from(id);
-
-    let conn = endpoint
-        .connect(addr, protocols::ALPN)
-        .await
-        .map_err(|_| AppError::HostUnavailable)?;
-
-    let (send, recv) = conn
+    let (send, recv) = connection
         .open_bi()
         .await
         .map_err(|_| AppError::HostUnavailable)?;
@@ -151,7 +150,7 @@ async fn route_to_host(
     match host {
         Some(h) => {
             let eid = h.endpoint_id.clone();
-            let resp = send_to_host(&state.endpoint, &eid, request).await?;
+            let resp = send_to_host(&h.connection, request).await?;
             Ok((resp, eid))
         }
         None => {
