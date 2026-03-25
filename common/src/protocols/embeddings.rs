@@ -1,10 +1,9 @@
 use bitcode::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 
-pub const ALPN: &[u8] = b"cocompute/embeddings/0";
-
 #[derive(Debug, Encode, Decode, Deserialize)]
 pub struct EmbeddingsRequest {
+    pub model: String,
     pub text: String,
 }
 

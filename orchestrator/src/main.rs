@@ -4,7 +4,8 @@ use axum::{Json, Router, extract::State, routing::post};
 use clap::Parser;
 use common::{
     helpers::{read_p2p, write_p2p},
-    protocols::embeddings::{self, EmbeddingsRequest, EmbeddingsResponse},
+    protocols::{self, Request, Response},
+    protocols::embeddings::{EmbeddingsRequest, EmbeddingsResponse},
 };
 use error::AppError;
 use iroh::{Endpoint, EndpointAddr, EndpointId};
@@ -63,20 +64,29 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn connect_side(
+/// Send a request to a host over iroh and get the response.
+async fn send_to_host(
     endpoint: &Endpoint,
     addr: EndpointAddr,
-    embeddings_request: EmbeddingsRequest,
-) -> anyhow::Result<EmbeddingsResponse> {
-    let conn = endpoint.connect(addr, embeddings::ALPN).await?;
+    request: Request,
+) -> Result<Response, AppError> {
+    let conn = endpoint
+        .connect(addr, protocols::ALPN)
+        .await
+        .map_err(|_| AppError::HostUnavailable)?;
 
-    let (send, recv) = conn.open_bi().await?;
+    let (send, recv) = conn
+        .open_bi()
+        .await
+        .map_err(|_| AppError::HostUnavailable)?;
 
-    write_p2p(send, embeddings_request).await?;
+    write_p2p(send, request)
+        .await
+        .map_err(|e| AppError::Internal(e))?;
 
-    tracing::debug!("receiving response");
-    let response = read_p2p(recv).await?;
-    tracing::debug!("received response");
+    let response: Response = read_p2p(recv)
+        .await
+        .map_err(|e| AppError::Internal(e))?;
 
     Ok(response)
 }
@@ -85,10 +95,17 @@ async fn create_embeddings(
     State(state): State<AppState>,
     Json(payload): Json<EmbeddingsRequest>,
 ) -> Result<Json<EmbeddingsResponse>, AppError> {
+    // TODO: Look up host from registry instead of hardcoded endpoint
     let endpoint_id: EndpointId =
         EndpointId::from_str("f2ebd84cfc3db91a0cee90bed7c4bad66450eb7942f5541bd21b9706e8d0d46d")
             .map_err(|e| AppError::Internal(anyhow::anyhow!("invalid endpoint id: {e}")))?;
     let address = EndpointAddr::from(endpoint_id);
-    let response = connect_side(&state.endpoint, address, payload).await?;
-    Ok(Json(response))
+
+    let request = Request::Embeddings(payload);
+    let response = send_to_host(&state.endpoint, address, request).await?;
+
+    match response {
+        Response::Embeddings { result, .. } => Ok(Json(result)),
+        _ => Err(AppError::Internal(anyhow::anyhow!("unexpected response type"))),
+    }
 }

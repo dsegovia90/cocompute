@@ -4,10 +4,21 @@ use anyhow::Context;
 use clap::Parser;
 use common::{
     helpers::{read_p2p, write_p2p},
-    protocols::embeddings::{self, EmbeddingsRequest, EmbeddingsResponse},
+    protocols::{
+        self, Metering, Request, Response,
+        chat::{ChatMessage, ChatResponse},
+        embeddings::{EmbeddingsRequest, EmbeddingsResponse},
+        registry::{RegistryRequest, RegistryResponse},
+    },
 };
 use iroh::protocol::AcceptError;
-use ollama_rs::{Ollama, generation::embeddings::request::GenerateEmbeddingsRequest};
+use ollama_rs::{
+    Ollama,
+    generation::{
+        chat::{ChatMessage as OllamaChatMessage, request::ChatMessageRequest},
+        embeddings::request::GenerateEmbeddingsRequest,
+    },
+};
 
 #[derive(Parser, Debug)]
 #[command(name = "cocompute-host")]
@@ -25,20 +36,111 @@ struct Args {
     key_path: String,
 }
 
+/// Handles all incoming streams on the single cocompute/0 connection.
 #[derive(Debug)]
-struct EmbeddingsHandler {
+struct CocomputeHandler {
     ollama: Ollama,
 }
 
-impl EmbeddingsHandler {
+impl CocomputeHandler {
     fn new(ollama_host: &str, ollama_port: u16) -> Self {
         Self {
             ollama: Ollama::new(ollama_host.to_string(), ollama_port),
         }
     }
+
+    async fn handle_embeddings(
+        &self,
+        req: EmbeddingsRequest,
+    ) -> anyhow::Result<Response> {
+        let request = GenerateEmbeddingsRequest::new(
+            req.model.clone(),
+            req.text.into(),
+        );
+
+        let start = std::time::Instant::now();
+        let res = self.ollama.generate_embeddings(request).await
+            .map_err(|e| anyhow::anyhow!("ollama embeddings error: {e}"))?;
+        let compute_ms = start.elapsed().as_millis() as u64;
+
+        Ok(Response::Embeddings {
+            result: EmbeddingsResponse::new(res.embeddings[0].clone()),
+            metering: Metering {
+                prompt_tokens: 0, // embeddings response doesn't expose token counts
+                completion_tokens: 0,
+                compute_ms,
+            },
+        })
+    }
+
+    async fn handle_chat(
+        &self,
+        req: common::protocols::chat::ChatRequest,
+    ) -> anyhow::Result<Response> {
+        use ollama_rs::generation::chat::MessageRole;
+
+        let messages: Vec<OllamaChatMessage> = req
+            .messages
+            .into_iter()
+            .map(|m| {
+                let role = match m.role.as_str() {
+                    "system" => MessageRole::System,
+                    "assistant" => MessageRole::Assistant,
+                    _ => MessageRole::User,
+                };
+                OllamaChatMessage::new(role, m.content)
+            })
+            .collect();
+
+        let request = ChatMessageRequest::new(req.model.clone(), messages);
+
+        let start = std::time::Instant::now();
+        let res = self.ollama.send_chat_messages(request).await
+            .map_err(|e| anyhow::anyhow!("ollama chat error: {e}"))?;
+        let compute_ms = start.elapsed().as_millis() as u64;
+
+        let role = match res.message.role {
+            MessageRole::Assistant => "assistant",
+            MessageRole::User => "user",
+            MessageRole::System => "system",
+            _ => "assistant",
+        };
+
+        let response_message = ChatMessage {
+            role: role.to_string(),
+            content: res.message.content,
+        };
+
+        let (prompt_tokens, completion_tokens) = res
+            .final_data
+            .map(|d| (d.prompt_eval_count as u32, d.eval_count as u32))
+            .unwrap_or((0, 0));
+
+        Ok(Response::Chat {
+            result: ChatResponse { message: response_message },
+            metering: Metering {
+                prompt_tokens,
+                completion_tokens,
+                compute_ms,
+            },
+        })
+    }
+
+    fn handle_registry(&self, req: RegistryRequest) -> Response {
+        match req {
+            RegistryRequest::Register(caps) => {
+                tracing::info!("host registered with {} models", caps.models.len());
+                Response::Registry(RegistryResponse::Ack)
+            }
+            RegistryRequest::Heartbeat => {
+                tracing::debug!("heartbeat received");
+                Response::Registry(RegistryResponse::Ack)
+            }
+        }
+    }
 }
 
-impl iroh::protocol::ProtocolHandler for EmbeddingsHandler {
+impl iroh::protocol::ProtocolHandler for CocomputeHandler {
     fn accept(
         &self,
         connection: iroh::endpoint::Connection,
@@ -48,47 +150,61 @@ impl iroh::protocol::ProtocolHandler for EmbeddingsHandler {
             let endpoint_id = connection.remote_id();
             tracing::info!("accepted connection from {endpoint_id}");
 
-            let (send, recv) = connection.accept_bi().await?;
+            // Handle multiple streams on this connection
+            loop {
+                let (send, recv) = match connection.accept_bi().await {
+                    Ok(streams) => streams,
+                    Err(_) => break, // Connection closed
+                };
 
-            let req: EmbeddingsRequest = read_p2p(recv)
-                .await
-                .map_err(|e| std::io::Error::other(e.context("failed to read request")))?;
+                let handler = CocomputeHandler {
+                    ollama: ollama.clone(),
+                };
 
-            tracing::info!("embedding text: {}", req.text);
-
-            let request = GenerateEmbeddingsRequest::new(
-                "mxbai-embed-large:latest".to_string(),
-                req.text.into(),
-            );
-
-            let res = ollama
-                .generate_embeddings(request)
-                .await
-                .map_err(|e| std::io::Error::other(format!("ollama error: {e}")))?;
-
-            write_p2p(send, EmbeddingsResponse::new(res.embeddings[0].clone()))
-                .await
-                .map_err(|e| std::io::Error::other(e.context("failed to write response")))?;
-
-            connection.closed().await;
+                // Spawn each stream handler as a separate task
+                tokio::spawn(async move {
+                    if let Err(e) = handle_stream(&handler, send, recv).await {
+                        tracing::error!("stream error: {e:?}");
+                    }
+                });
+            }
 
             Ok(())
         })
     }
 }
 
+async fn handle_stream(
+    handler: &CocomputeHandler,
+    send: iroh::endpoint::SendStream,
+    recv: iroh::endpoint::RecvStream,
+) -> anyhow::Result<()> {
+    let request: Request = read_p2p(recv).await?;
+
+    let response = match request {
+        Request::Embeddings(req) => {
+            tracing::info!("embeddings request for model: {}", req.model);
+            handler.handle_embeddings(req).await?
+        }
+        Request::Chat(req) => {
+            tracing::info!("chat request for model: {}", req.model);
+            handler.handle_chat(req).await?
+        }
+        Request::Registry(req) => handler.handle_registry(req),
+    };
+
+    write_p2p(send, response).await?;
+    Ok(())
+}
+
 /// Expand ~ to the user's home directory
 fn expand_tilde(path: &str) -> PathBuf {
     if let Some(rest) = path.strip_prefix("~/") {
-        if let Some(home) = dirs_home() {
+        if let Some(home) = std::env::var_os("HOME").map(PathBuf::from) {
             return home.join(rest);
         }
     }
     PathBuf::from(path)
-}
-
-fn dirs_home() -> Option<PathBuf> {
-    std::env::var_os("HOME").map(PathBuf::from)
 }
 
 /// Load or generate an iroh secret key for stable EndpointId across restarts
@@ -140,10 +256,10 @@ async fn start_accept_side(
 
     tracing::info!("endpoint id: {:?}", endpoint.addr().id);
 
-    let handler = EmbeddingsHandler::new(ollama_url, ollama_port);
+    let handler = CocomputeHandler::new(ollama_url, ollama_port);
 
     let router = iroh::protocol::Router::builder(endpoint)
-        .accept(embeddings::ALPN, handler)
+        .accept(protocols::ALPN, handler)
         .spawn();
 
     Ok(router)
