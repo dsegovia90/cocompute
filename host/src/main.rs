@@ -206,13 +206,43 @@ async fn connect_and_serve(
         _ => anyhow::bail!("unexpected response to registration"),
     }
 
-    // Step 2: Loop accepting inference streams from the orchestrator
+    // Step 2: Start heartbeat task alongside inference loop
+    let heartbeat_conn = conn.clone();
+    let heartbeat_handle = tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(30));
+        loop {
+            interval.tick().await;
+            let req = Request::Registry(RegistryRequest::Heartbeat);
+            match heartbeat_conn.open_bi().await {
+                Ok((send, recv)) => {
+                    if let Err(e) = write_p2p(send, req).await {
+                        tracing::warn!("heartbeat send failed: {e}");
+                        break;
+                    }
+                    match read_p2p::<Response>(recv).await {
+                        Ok(_) => tracing::debug!("heartbeat ack"),
+                        Err(e) => {
+                            tracing::warn!("heartbeat recv failed: {e}");
+                            break;
+                        }
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!("heartbeat open_bi failed: {e}");
+                    break;
+                }
+            }
+        }
+    });
+
+    // Step 3: Loop accepting inference streams from the orchestrator
     tracing::info!("serving inference requests...");
     loop {
         let (send, recv) = match conn.accept_bi().await {
             Ok(streams) => streams,
             Err(e) => {
                 tracing::warn!("connection to orchestrator lost: {e}");
+                heartbeat_handle.abort();
                 return Err(e.into());
             }
         };

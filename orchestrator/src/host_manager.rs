@@ -1,4 +1,10 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::HashMap,
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
+};
 
 use common::protocols::registry::Capabilities;
 use iroh::endpoint::Connection;
@@ -23,12 +29,15 @@ impl ConnectedHost {
 #[derive(Debug, Clone)]
 pub struct HostManager {
     hosts: Arc<RwLock<HashMap<String, ConnectedHost>>>,
+    /// Round-robin counter for distributing requests across hosts.
+    counter: Arc<AtomicUsize>,
 }
 
 impl HostManager {
     pub fn new() -> Self {
         Self {
             hosts: Arc::new(RwLock::new(HashMap::new())),
+            counter: Arc::new(AtomicUsize::new(0)),
         }
     }
 
@@ -54,10 +63,20 @@ impl HostManager {
         tracing::info!("host unregistered: {endpoint_id}");
     }
 
-    /// Find a host that has the requested model and return a clone.
+    /// Find a host that has the requested model, rotating across matching hosts.
     pub async fn find_host_for_model(&self, model_name: &str) -> Option<ConnectedHost> {
         let hosts = self.hosts.read().await;
-        hosts.values().find(|h| h.has_model(model_name)).cloned()
+        let matching: Vec<&ConnectedHost> = hosts
+            .values()
+            .filter(|h| h.has_model(model_name))
+            .collect();
+
+        if matching.is_empty() {
+            return None;
+        }
+
+        let idx = self.counter.fetch_add(1, Ordering::Relaxed) % matching.len();
+        Some(matching[idx].clone())
     }
 
     /// List all available model names across all hosts.
@@ -94,13 +113,8 @@ mod tests {
         }
     }
 
-    // Note: tests that need a real Connection are E2E tests.
-    // Unit tests here cover the non-connection logic.
-
     #[test]
     fn connected_host_has_model() {
-        // We can't easily construct a Connection in unit tests,
-        // so we test the has_model logic directly on Capabilities.
         let caps = test_capabilities(vec!["llama3:latest", "mxbai-embed-large:latest"]);
         assert!(caps.models.iter().any(|m| m.name == "llama3:latest"));
         assert!(caps.models.iter().any(|m| m.name == "mxbai-embed-large:latest"));

@@ -73,8 +73,45 @@ impl iroh::protocol::ProtocolHandler for HostAcceptor {
             // Store the connection in the HostManager
             hosts.register(endpoint_id.clone(), capabilities, connection.clone()).await;
 
-            // Wait for the connection to close, then unregister
-            connection.closed().await;
+            // Handle subsequent streams from the host (heartbeats)
+            loop {
+                match connection.accept_bi().await {
+                    Ok((send, recv)) => {
+                        let request: Request = match read_p2p(recv).await {
+                            Ok(r) => r,
+                            Err(e) => {
+                                tracing::warn!("host {endpoint_id} stream read error: {e}");
+                                break;
+                            }
+                        };
+
+                        match request {
+                            Request::Registry(common::protocols::registry::RegistryRequest::Heartbeat) => {
+                                tracing::debug!("heartbeat from {endpoint_id}");
+                                let resp = Response::Registry(RegistryResponse::Ack);
+                                if let Err(e) = write_p2p(send, resp).await {
+                                    tracing::warn!("heartbeat ack failed for {endpoint_id}: {e}");
+                                    break;
+                                }
+                            }
+                            Request::Registry(common::protocols::registry::RegistryRequest::Register(caps)) => {
+                                tracing::info!("host {endpoint_id} re-registered with {} models", caps.models.len());
+                                hosts.register(endpoint_id.clone(), caps, connection.clone()).await;
+                                let resp = Response::Registry(RegistryResponse::Ack);
+                                if let Err(e) = write_p2p(send, resp).await {
+                                    tracing::warn!("re-register ack failed for {endpoint_id}: {e}");
+                                    break;
+                                }
+                            }
+                            _ => {
+                                tracing::warn!("unexpected request from host {endpoint_id} on host-initiated stream");
+                            }
+                        }
+                    }
+                    Err(_) => break, // Connection closed
+                }
+            }
+
             tracing::info!("host disconnected: {endpoint_id}");
             hosts.unregister(&endpoint_id).await;
 
