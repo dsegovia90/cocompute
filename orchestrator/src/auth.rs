@@ -55,3 +55,54 @@ pub async fn require_api_key(
 
     Ok(next.run(request).await)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn hash_key_deterministic() {
+        let hash1 = hash_key("test-key-123");
+        let hash2 = hash_key("test-key-123");
+        assert_eq!(hash1, hash2);
+    }
+
+    #[test]
+    fn hash_key_different_inputs_different_outputs() {
+        let hash1 = hash_key("key-a");
+        let hash2 = hash_key("key-b");
+        assert_ne!(hash1, hash2);
+    }
+
+    #[test]
+    fn hash_key_is_hex_sha256() {
+        let hash = hash_key("hello");
+        // SHA-256 of "hello" is well-known
+        assert_eq!(hash, "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824");
+    }
+
+    #[test]
+    fn hash_key_output_length() {
+        let hash = hash_key("any-key");
+        assert_eq!(hash.len(), 64); // SHA-256 = 32 bytes = 64 hex chars
+    }
+
+    #[test]
+    fn generate_api_key_length() {
+        let key = generate_api_key();
+        assert_eq!(key.len(), 64); // 32 bytes = 64 hex chars
+    }
+
+    #[test]
+    fn generate_api_key_is_hex() {
+        let key = generate_api_key();
+        assert!(key.chars().all(|c| c.is_ascii_hexdigit()));
+    }
+
+    #[test]
+    fn generate_api_key_unique() {
+        let key1 = generate_api_key();
+        let key2 = generate_api_key();
+        assert_ne!(key1, key2);
+    }
+}

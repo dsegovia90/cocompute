@@ -68,3 +68,94 @@ impl HostManager {
         !self.hosts.read().await.is_empty()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use common::protocols::registry::ModelInfo;
+
+    fn test_capabilities(models: Vec<&str>) -> Capabilities {
+        Capabilities {
+            models: models
+                .into_iter()
+                .map(|name| ModelInfo {
+                    name: name.to_string(),
+                    quantization: "q4_0".to_string(),
+                    vram_mb: 4096,
+                    ram_mb: 8192,
+                })
+                .collect(),
+        }
+    }
+
+    #[tokio::test]
+    async fn register_and_find_host() {
+        let mgr = HostManager::new();
+        mgr.register("host-1".into(), test_capabilities(vec!["llama3:latest"])).await;
+
+        let found = mgr.find_host_for_model("llama3:latest").await;
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().endpoint_id, "host-1");
+    }
+
+    #[tokio::test]
+    async fn find_returns_none_for_unknown_model() {
+        let mgr = HostManager::new();
+        mgr.register("host-1".into(), test_capabilities(vec!["llama3:latest"])).await;
+
+        let found = mgr.find_host_for_model("gpt-4").await;
+        assert!(found.is_none());
+    }
+
+    #[tokio::test]
+    async fn unregister_removes_host() {
+        let mgr = HostManager::new();
+        mgr.register("host-1".into(), test_capabilities(vec!["llama3:latest"])).await;
+        assert!(mgr.has_hosts().await);
+
+        mgr.unregister("host-1").await;
+        assert!(!mgr.has_hosts().await);
+        assert!(mgr.find_host_for_model("llama3:latest").await.is_none());
+    }
+
+    #[tokio::test]
+    async fn available_models_across_hosts() {
+        let mgr = HostManager::new();
+        mgr.register("host-1".into(), test_capabilities(vec!["llama3:latest"])).await;
+        mgr.register("host-2".into(), test_capabilities(vec!["mxbai-embed-large:latest"])).await;
+
+        let mut models = mgr.available_models().await;
+        models.sort();
+        assert_eq!(models, vec!["llama3:latest", "mxbai-embed-large:latest"]);
+    }
+
+    #[tokio::test]
+    async fn empty_manager_has_no_hosts() {
+        let mgr = HostManager::new();
+        assert!(!mgr.has_hosts().await);
+        assert!(mgr.available_models().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn register_overwrites_existing_host() {
+        let mgr = HostManager::new();
+        mgr.register("host-1".into(), test_capabilities(vec!["llama3:latest"])).await;
+        mgr.register("host-1".into(), test_capabilities(vec!["mistral:latest"])).await;
+
+        // Should have the new capabilities, not the old
+        assert!(mgr.find_host_for_model("mistral:latest").await.is_some());
+        assert!(mgr.find_host_for_model("llama3:latest").await.is_none());
+    }
+
+    #[test]
+    fn connected_host_has_model() {
+        let host = ConnectedHost {
+            endpoint_id: "test".into(),
+            capabilities: test_capabilities(vec!["llama3:latest", "mxbai-embed-large:latest"]),
+            connected_at: chrono::Utc::now(),
+        };
+        assert!(host.has_model("llama3:latest"));
+        assert!(host.has_model("mxbai-embed-large:latest"));
+        assert!(!host.has_model("gpt-4"));
+    }
+}

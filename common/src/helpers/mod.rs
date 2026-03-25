@@ -3,7 +3,7 @@ use iroh::endpoint::{RecvStream, SendStream};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 /// Maximum message size: 16 MiB. Prevents OOM from malicious/buggy peers.
-const MAX_MESSAGE_SIZE: u32 = 16 * 1024 * 1024;
+pub const MAX_MESSAGE_SIZE: u32 = 16 * 1024 * 1024;
 
 pub async fn write_p2p<T>(mut send_stream: SendStream, message: T) -> anyhow::Result<()>
 where
