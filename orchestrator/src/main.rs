@@ -1,8 +1,8 @@
-use axum::{Json, Router, extract::State, middleware, routing::post};
+use axum::{Json, Router, extract::State, middleware, routing::{get, post}};
 use clap::{Parser, Subcommand};
 use common::{
     helpers::{read_p2p, write_p2p},
-    protocols::{self, Request, Response},
+    protocols::{self, Metering, Request, Response},
 };
 use error::AppError;
 use host_manager::HostManager;
@@ -95,6 +95,7 @@ async fn main() -> anyhow::Result<()> {
             let app = Router::new()
                 .route("/v1/embeddings", post(create_embeddings))
                 .route("/v1/chat/completions", post(create_chat_completion))
+                .route("/v1/stats", get(get_stats))
                 .route_layer(middleware::from_fn_with_state(db, auth::require_api_key))
                 .with_state(state);
 
@@ -144,11 +145,15 @@ async fn route_to_host(
     state: &AppState,
     model: &str,
     request: Request,
-) -> Result<Response, AppError> {
+) -> Result<(Response, String), AppError> {
     let host = state.hosts.find_host_for_model(model).await;
 
     match host {
-        Some(h) => send_to_host(&state.endpoint, &h.endpoint_id, request).await,
+        Some(h) => {
+            let eid = h.endpoint_id.clone();
+            let resp = send_to_host(&state.endpoint, &eid, request).await?;
+            Ok((resp, eid))
+        }
         None => {
             let available = state.hosts.available_models().await;
             if available.is_empty() {
@@ -158,6 +163,32 @@ async fn route_to_host(
             }
         }
     }
+}
+
+/// Log metering data to the database (fire-and-forget).
+fn log_metering(
+    db: DatabaseConnection,
+    host_endpoint_id: String,
+    model: String,
+    request_type: String,
+    metering: &Metering,
+) {
+    let m = metering.clone();
+    tokio::spawn(async move {
+        let record = db::entities::metering_logs::ActiveModel {
+            host_endpoint_id: Set(host_endpoint_id),
+            model: Set(model),
+            request_type: Set(request_type),
+            prompt_tokens: Set(m.prompt_tokens as i32),
+            completion_tokens: Set(m.completion_tokens as i32),
+            compute_ms: Set(m.compute_ms as i64),
+            created_at: Set(chrono::Utc::now()),
+            ..Default::default()
+        };
+        if let Err(e) = record.insert(&db).await {
+            tracing::error!("failed to log metering: {e}");
+        }
+    });
 }
 
 /// POST /v1/embeddings — OpenAI-compatible embeddings endpoint.
@@ -174,11 +205,11 @@ async fn create_embeddings(
     };
 
     let request = Request::Embeddings(internal_request);
-    let response = route_to_host(&state, &model, request).await?;
+    let (response, host_id) = route_to_host(&state, &model, request).await?;
 
     match response {
-        Response::Embeddings { result, metering } => {
-            // Translate internal → OpenAI format
+        Response::Embeddings { result, ref metering } => {
+            log_metering(state.db.clone(), host_id, model.clone(), "embeddings".into(), metering);
             Ok(Json(OpenAIEmbeddingsResponse {
                 object: "list",
                 data: vec![OpenAIEmbeddingData {
@@ -216,10 +247,11 @@ async fn create_chat_completion(
     };
 
     let request = Request::Chat(internal_request);
-    let response = route_to_host(&state, &model, request).await?;
+    let (response, host_id) = route_to_host(&state, &model, request).await?;
 
     match response {
-        Response::Chat { result, metering } => {
+        Response::Chat { result, ref metering } => {
+            log_metering(state.db.clone(), host_id, model.clone(), "chat".into(), metering);
             let created = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap_or_default()
@@ -243,4 +275,43 @@ async fn create_chat_completion(
         }
         _ => Err(AppError::Internal(anyhow::anyhow!("unexpected response type"))),
     }
+}
+
+/// GET /v1/stats — Usage statistics from metering logs.
+async fn get_stats(
+    State(state): State<AppState>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    use sea_orm::{EntityTrait, PaginatorTrait, QueryOrder, QuerySelect};
+
+    let total_requests: u64 = db::entities::metering_logs::Entity::find()
+        .count(&state.db)
+        .await
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("db error: {e}")))?;
+
+    let recent = db::entities::metering_logs::Entity::find()
+        .order_by_desc(db::entities::metering_logs::Column::CreatedAt)
+        .limit(10)
+        .all(&state.db)
+        .await
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("db error: {e}")))?;
+
+    let recent_entries: Vec<serde_json::Value> = recent
+        .into_iter()
+        .map(|r| {
+            serde_json::json!({
+                "host": r.host_endpoint_id,
+                "model": r.model,
+                "type": r.request_type,
+                "prompt_tokens": r.prompt_tokens,
+                "completion_tokens": r.completion_tokens,
+                "compute_ms": r.compute_ms,
+                "created_at": r.created_at.to_string(),
+            })
+        })
+        .collect();
+
+    Ok(Json(serde_json::json!({
+        "total_requests": total_requests,
+        "recent": recent_entries,
+    })))
 }
