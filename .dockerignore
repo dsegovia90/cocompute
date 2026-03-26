@@ -1,0 +1,8 @@
+target
+*.db
+*.db-shm
+*.db-wal
+*.key
+.DS_Store
+.git
+.github
