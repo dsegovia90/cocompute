@@ -18,8 +18,10 @@ RUN mkdir -p common/src host/src orchestrator/src && \
 # Build dependencies only (cached layer)
 RUN cargo build --release -p cocompute_orchestrator 2>/dev/null || true
 
-# Copy actual source
+# Remove dummy source, copy real source
+RUN rm -rf common/src host/src orchestrator/src
 COPY common/ common/
+COPY host/ host/
 COPY orchestrator/ orchestrator/
 
 # Build the real binary
