@@ -1,6 +1,6 @@
 use bitcode::{Decode, Encode};
 use common::protocols::{
-    Metering, Request, Response,
+    ChatStreamFrame, Metering, Request, Response,
     chat::{ChatMessage, ChatRequest, ChatResponse},
     embeddings::{EmbeddingsRequest, EmbeddingsResponse},
     registry::{Capabilities, ModelInfo, RegistryRequest},
@@ -39,6 +39,7 @@ fn chat_request_roundtrip() {
             ChatMessage { role: "user".into(), content: "Hello".into() },
         ],
         temperature: Some(0.7),
+        stream: false,
     };
     let decoded: ChatRequest = roundtrip(&req);
     assert_eq!(decoded.model, "llama3:latest");
@@ -54,6 +55,7 @@ fn chat_request_no_temperature_roundtrip() {
         model: "llama3:latest".into(),
         messages: vec![ChatMessage { role: "user".into(), content: "Hi".into() }],
         temperature: None,
+        stream: false,
     };
     let decoded: ChatRequest = roundtrip(&req);
     assert_eq!(decoded.temperature, None);
@@ -140,6 +142,7 @@ fn request_enum_chat_roundtrip() {
         model: "llama3:latest".into(),
         messages: vec![ChatMessage { role: "user".into(), content: "Hi".into() }],
         temperature: None,
+        stream: false,
     });
     let decoded: Request = roundtrip(&req);
     assert!(matches!(decoded, Request::Chat(_)));
@@ -215,4 +218,61 @@ fn large_embedding_vector_roundtrip() {
     assert_eq!(decoded.embeddings.len(), 4096);
     assert_eq!(decoded.embeddings[0], 0.0);
     assert!((decoded.embeddings[4095] - 4.095).abs() < 0.001);
+}
+
+#[test]
+fn chat_request_stream_true_roundtrip() {
+    let req = ChatRequest {
+        model: "llama3:latest".into(),
+        messages: vec![ChatMessage { role: "user".into(), content: "Hi".into() }],
+        temperature: None,
+        stream: true,
+    };
+    let decoded: ChatRequest = roundtrip(&req);
+    assert!(decoded.stream);
+}
+
+#[test]
+fn response_chat_stream_start_roundtrip() {
+    let resp = Response::ChatStreamStart;
+    let decoded: Response = roundtrip(&resp);
+    assert!(matches!(decoded, Response::ChatStreamStart));
+}
+
+#[test]
+fn chat_stream_frame_delta_roundtrip() {
+    let frame = ChatStreamFrame::Delta("Hello ".into());
+    let decoded: ChatStreamFrame = roundtrip(&frame);
+    match decoded {
+        ChatStreamFrame::Delta(content) => assert_eq!(content, "Hello "),
+        _ => panic!("expected Delta"),
+    }
+}
+
+#[test]
+fn chat_stream_frame_done_roundtrip() {
+    let frame = ChatStreamFrame::Done(Metering {
+        prompt_tokens: 15,
+        completion_tokens: 42,
+        compute_ms: 2000,
+    });
+    let decoded: ChatStreamFrame = roundtrip(&frame);
+    match decoded {
+        ChatStreamFrame::Done(m) => {
+            assert_eq!(m.prompt_tokens, 15);
+            assert_eq!(m.completion_tokens, 42);
+            assert_eq!(m.compute_ms, 2000);
+        }
+        _ => panic!("expected Done"),
+    }
+}
+
+#[test]
+fn chat_stream_frame_empty_delta_roundtrip() {
+    let frame = ChatStreamFrame::Delta(String::new());
+    let decoded: ChatStreamFrame = roundtrip(&frame);
+    match decoded {
+        ChatStreamFrame::Delta(content) => assert!(content.is_empty()),
+        _ => panic!("expected Delta"),
+    }
 }

@@ -37,4 +37,16 @@ pub enum Response {
         result: chat::ChatResponse,
         metering: Metering,
     },
+    /// Signals that the response will be streamed as multiple ChatStreamFrame messages.
+    ChatStreamStart,
+}
+
+/// A frame in a streaming chat response. Sent as multiple frames on the same stream
+/// after a ChatStreamStart response.
+#[derive(Debug, Encode, Decode)]
+pub enum ChatStreamFrame {
+    /// A content chunk.
+    Delta(String),
+    /// Final frame with metering. No more frames after this.
+    Done(Metering),
 }

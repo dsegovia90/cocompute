@@ -43,27 +43,34 @@ struct Args {
 /// Handle a single inference stream from the orchestrator.
 async fn handle_inference_stream(
     ollama: Ollama,
-    send: iroh::endpoint::SendStream,
+    mut send: iroh::endpoint::SendStream,
     recv: iroh::endpoint::RecvStream,
 ) -> anyhow::Result<()> {
     let request: Request = read_p2p(recv).await?;
 
-    let response = match request {
+    match request {
         Request::Embeddings(req) => {
             tracing::info!("embeddings request for model: {}", req.model);
-            handle_embeddings(&ollama, req).await?
+            let response = handle_embeddings(&ollama, req).await?;
+            write_p2p(send, response).await?;
+        }
+        Request::Chat(req) if req.stream => {
+            tracing::info!("streaming chat request for model: {}", req.model);
+            handle_chat_stream(&ollama, req, &mut send).await?;
+            send.finish()?;
         }
         Request::Chat(req) => {
             tracing::info!("chat request for model: {}", req.model);
-            handle_chat(&ollama, req).await?
+            let response = handle_chat(&ollama, req).await?;
+            write_p2p(send, response).await?;
         }
         Request::Registry(req) => {
             tracing::debug!("registry request on inference stream");
-            handle_registry(req)
+            let response = handle_registry(req);
+            write_p2p(send, response).await?;
         }
     };
 
-    write_p2p(send, response).await?;
     Ok(())
 }
 
@@ -139,6 +146,81 @@ async fn handle_chat(ollama: &Ollama, req: ChatRequest) -> anyhow::Result<Respon
             compute_ms,
         },
     })
+}
+
+async fn handle_chat_stream(
+    ollama: &Ollama,
+    req: ChatRequest,
+    send: &mut iroh::endpoint::SendStream,
+) -> anyhow::Result<()> {
+    use common::helpers::write_frame;
+    use common::protocols::ChatStreamFrame;
+    use ollama_rs::generation::chat::MessageRole;
+    use tokio_stream::StreamExt;
+
+    let messages: Vec<OllamaChatMessage> = req
+        .messages
+        .into_iter()
+        .map(|m| {
+            let role = match m.role.as_str() {
+                "system" => MessageRole::System,
+                "assistant" => MessageRole::Assistant,
+                _ => MessageRole::User,
+            };
+            OllamaChatMessage::new(role, m.content)
+        })
+        .collect();
+
+    let request = ChatMessageRequest::new(req.model.clone(), messages);
+
+    // Signal that we're starting a stream
+    write_frame(send, Response::ChatStreamStart).await?;
+
+    let start = std::time::Instant::now();
+    let mut stream = ollama
+        .send_chat_messages_stream(request)
+        .await
+        .map_err(|e| anyhow::anyhow!("ollama stream error: {e}"))?;
+
+    let mut prompt_tokens: u32 = 0;
+    let mut completion_tokens: u32 = 0;
+
+    while let Some(chunk) = stream.next().await {
+        match chunk {
+            Ok(resp) => {
+                let content = resp.message.content.clone();
+                if !content.is_empty() {
+                    write_frame(send, ChatStreamFrame::Delta(content)).await?;
+                }
+
+                if resp.done {
+                    if let Some(final_data) = resp.final_data {
+                        prompt_tokens = final_data.prompt_eval_count as u32;
+                        completion_tokens = final_data.eval_count as u32;
+                    }
+                }
+            }
+            Err(_) => {
+                tracing::warn!("ollama stream chunk error");
+                break;
+            }
+        }
+    }
+
+    let compute_ms = start.elapsed().as_millis() as u64;
+
+    // Send final frame with metering
+    write_frame(
+        send,
+        ChatStreamFrame::Done(Metering {
+            prompt_tokens,
+            completion_tokens,
+            compute_ms,
+        }),
+    )
+    .await?;
+
+    Ok(())
 }
 
 fn handle_registry(req: common::protocols::registry::RegistryRequest) -> Response {

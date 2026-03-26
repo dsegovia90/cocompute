@@ -1,8 +1,9 @@
-use axum::{Json, Router, extract::State, middleware, routing::{get, post}};
+use axum::{Json, Router, extract::State, middleware, response::IntoResponse, routing::{get, post}};
+use axum::response::sse::{Event, Sse};
 use clap::{Parser, Subcommand};
 use common::{
-    helpers::{read_p2p, write_p2p},
-    protocols::{self, Metering, Request, Response},
+    helpers::{read_frame, read_p2p, write_p2p},
+    protocols::{self, ChatStreamFrame, Metering, Request, Response},
 };
 use error::AppError;
 use host_acceptor::HostAcceptor;
@@ -10,6 +11,7 @@ use host_manager::HostManager;
 use iroh::Endpoint;
 use openai::{
     OpenAIChatChoice, OpenAIChatMessage, OpenAIChatRequest, OpenAIChatResponse,
+    OpenAIChatStreamChunk, OpenAIChatStreamChoice, OpenAIChatStreamDelta,
     OpenAIEmbeddingData, OpenAIEmbeddingsRequest, OpenAIEmbeddingsResponse, OpenAIUsage,
 };
 use sea_orm::{ActiveModelTrait, Database, DatabaseConnection, Set};
@@ -229,12 +231,14 @@ async fn create_embeddings(
     }
 }
 
-/// POST /v1/chat/completions — OpenAI-compatible chat endpoint (non-streaming).
+/// POST /v1/chat/completions — OpenAI-compatible chat endpoint.
+/// Supports both streaming (SSE) and non-streaming responses.
 async fn create_chat_completion(
     State(state): State<AppState>,
     Json(payload): Json<OpenAIChatRequest>,
-) -> Result<Json<OpenAIChatResponse>, AppError> {
+) -> Result<axum::response::Response, AppError> {
     let model = payload.model.clone();
+    let stream = payload.stream;
 
     // Translate OpenAI format → internal protocol
     let internal_request = common::protocols::chat::ChatRequest {
@@ -248,8 +252,21 @@ async fn create_chat_completion(
             })
             .collect(),
         temperature: payload.temperature,
+        stream,
     };
 
+    if stream {
+        create_chat_completion_stream(state, model, internal_request).await
+    } else {
+        create_chat_completion_sync(state, model, internal_request).await
+    }
+}
+
+async fn create_chat_completion_sync(
+    state: AppState,
+    model: String,
+    internal_request: common::protocols::chat::ChatRequest,
+) -> Result<axum::response::Response, AppError> {
     let request = Request::Chat(internal_request);
     let (response, host_id) = route_to_host(&state, &model, request).await?;
 
@@ -275,10 +292,137 @@ async fn create_chat_completion(
                     finish_reason: "stop",
                 }],
                 usage: OpenAIUsage::from_metering(&metering),
-            }))
+            })
+            .into_response())
         }
         _ => Err(AppError::Internal(anyhow::anyhow!("unexpected response type"))),
     }
+}
+
+async fn create_chat_completion_stream(
+    state: AppState,
+    model: String,
+    internal_request: common::protocols::chat::ChatRequest,
+) -> Result<axum::response::Response, AppError> {
+    let request = Request::Chat(internal_request);
+
+    // Find host and open a bi-stream
+    let host = state.hosts.find_host_for_model(&model).await;
+    let host = match host {
+        Some(h) => h,
+        None => {
+            let available = state.hosts.available_models().await;
+            if available.is_empty() {
+                return Err(AppError::HostUnavailable);
+            } else {
+                return Err(AppError::ModelNotFound { available });
+            }
+        }
+    };
+
+    let host_id = host.endpoint_id.clone();
+    let conn = &host.connection;
+
+    let (send, mut recv) = conn
+        .open_bi()
+        .await
+        .map_err(|_| AppError::HostUnavailable)?;
+
+    write_p2p(send, request)
+        .await
+        .map_err(AppError::Internal)?;
+
+    // Read the ChatStreamStart response
+    let first: Option<Response> = read_frame(&mut recv)
+        .await
+        .map_err(AppError::Internal)?;
+
+    match first {
+        Some(Response::ChatStreamStart) => {}
+        _ => return Err(AppError::Internal(anyhow::anyhow!("expected ChatStreamStart"))),
+    }
+
+    let created = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    let chat_id = format!("chatcmpl-{}", hex::encode(&created.to_be_bytes()));
+
+    let db = state.db.clone();
+    let model_clone = model.clone();
+
+    // Build SSE stream that reads frames from iroh
+    let stream = async_stream::stream! {
+        // First chunk: role
+        yield Ok::<_, std::convert::Infallible>(Event::default().data(serde_json::to_string(&OpenAIChatStreamChunk {
+            id: chat_id.clone(),
+            object: "chat.completion.chunk",
+            created,
+            model: model.clone(),
+            choices: vec![OpenAIChatStreamChoice {
+                index: 0,
+                delta: OpenAIChatStreamDelta {
+                    role: Some("assistant".to_string()),
+                    content: None,
+                },
+                finish_reason: None,
+            }],
+        }).unwrap()));
+
+        // Read chunks from iroh
+        loop {
+            match read_frame::<ChatStreamFrame>(&mut recv).await {
+                Ok(Some(ChatStreamFrame::Delta(content))) => {
+                    yield Ok(Event::default().data(serde_json::to_string(&OpenAIChatStreamChunk {
+                        id: chat_id.clone(),
+                        object: "chat.completion.chunk",
+                        created,
+                        model: model.clone(),
+                        choices: vec![OpenAIChatStreamChoice {
+                            index: 0,
+                            delta: OpenAIChatStreamDelta {
+                                role: None,
+                                content: Some(content),
+                            },
+                            finish_reason: None,
+                        }],
+                    }).unwrap()));
+                }
+                Ok(Some(ChatStreamFrame::Done(metering))) => {
+                    log_metering(db.clone(), host_id.clone(), model_clone.clone(), "chat_stream".into(), &metering);
+
+                    // Final chunk with finish_reason
+                    yield Ok(Event::default().data(serde_json::to_string(&OpenAIChatStreamChunk {
+                        id: chat_id.clone(),
+                        object: "chat.completion.chunk",
+                        created,
+                        model: model.clone(),
+                        choices: vec![OpenAIChatStreamChoice {
+                            index: 0,
+                            delta: OpenAIChatStreamDelta {
+                                role: None,
+                                content: None,
+                            },
+                            finish_reason: Some("stop"),
+                        }],
+                    }).unwrap()));
+
+                    yield Ok(Event::default().data("[DONE]".to_string()));
+                    break;
+                }
+                Ok(None) => {
+                    yield Ok(Event::default().data("[DONE]".to_string()));
+                    break;
+                }
+                Err(e) => {
+                    tracing::error!("stream frame error: {e}");
+                    break;
+                }
+            }
+        }
+    };
+
+    Ok(Sse::new(stream).into_response())
 }
 
 /// GET /v1/stats — Usage statistics from metering logs.
