@@ -44,7 +44,42 @@ pub struct OpenAIChatRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OpenAIChatMessage {
     pub role: String,
+    #[serde(deserialize_with = "deserialize_content")]
     pub content: String,
+}
+
+/// OpenAI allows `content` to be either a string or an array of content parts.
+/// We flatten it to a string for simplicity.
+fn deserialize_content<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de;
+
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Content {
+        String(String),
+        Parts(Vec<ContentPart>),
+    }
+
+    #[derive(Deserialize)]
+    struct ContentPart {
+        #[serde(default)]
+        text: Option<String>,
+    }
+
+    match Content::deserialize(deserializer)? {
+        Content::String(s) => Ok(s),
+        Content::Parts(parts) => {
+            let text: String = parts
+                .into_iter()
+                .filter_map(|p| p.text)
+                .collect::<Vec<_>>()
+                .join("");
+            Ok(text)
+        }
+    }
 }
 
 #[derive(Debug, Serialize)]

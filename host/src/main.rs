@@ -1,7 +1,5 @@
-use std::path::PathBuf;
 use std::str::FromStr;
 
-use anyhow::Context;
 use clap::Parser;
 use common::{
     helpers::{read_p2p, write_p2p},
@@ -112,9 +110,9 @@ async fn handle_chat(ollama: &Ollama, req: ChatRequest) -> anyhow::Result<Respon
         .collect();
 
     let mut request = ChatMessageRequest::new(req.model.clone(), messages);
-    if let Some(think) = req.think {
-        request = request.think(if think { ThinkType::True } else { ThinkType::False });
-    }
+    // Default to think=false when not specified — most OpenAI clients don't know about thinking mode
+    let think = req.think.unwrap_or(false);
+    request = request.think(if think { ThinkType::True } else { ThinkType::False });
 
     let start = std::time::Instant::now();
     let res = ollama
@@ -177,9 +175,9 @@ async fn handle_chat_stream(
         .collect();
 
     let mut request = ChatMessageRequest::new(req.model.clone(), messages);
-    if let Some(think) = req.think {
-        request = request.think(if think { ThinkType::True } else { ThinkType::False });
-    }
+    // Default to think=false when not specified — most OpenAI clients don't know about thinking mode
+    let think = req.think.unwrap_or(false);
+    request = request.think(if think { ThinkType::True } else { ThinkType::False });
 
     // Signal that we're starting a stream
     write_frame(send, Response::ChatStreamStart).await?;
