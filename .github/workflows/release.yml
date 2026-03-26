@@ -34,9 +34,9 @@ jobs:
         if: contains(matrix.target, 'musl')
         run: |
           sudo apt-get update
-          sudo apt-get install -y musl-tools
+          sudo apt-get install -y musl-tools perl make
           if [[ "${{ matrix.target }}" == "aarch64-unknown-linux-musl" ]]; then
-            sudo apt-get install -y gcc-aarch64-linux-gnu
+            sudo apt-get install -y gcc-aarch64-linux-gnu musl-dev
             echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
           fi
 
@@ -46,7 +46,9 @@ jobs:
           targets: ${{ matrix.target }}
 
       - name: Build host binary
-        run: cargo build --release --target ${{ matrix.target }} -p cocompute_host
+        env:
+          OPENSSL_STATIC: "1"
+        run: cargo build --release --target ${{ matrix.target }} -p cocompute_host --features openssl-vendored
 
       - name: Package binary
         run: |
