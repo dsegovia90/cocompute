@@ -109,12 +109,18 @@ async fn handle_chat(ollama: &Ollama, req: ChatRequest) -> anyhow::Result<Respon
                 "assistant" => MessageRole::Assistant,
                 _ => MessageRole::User,
             };
-            OllamaChatMessage::new(role, m.content)
+            let mut msg = OllamaChatMessage::new(role, m.content);
+            if !m.images.is_empty() {
+                let images = m.images.into_iter()
+                    .map(ollama_rs::generation::images::Image::from_base64)
+                    .collect();
+                msg = msg.with_images(images);
+            }
+            msg
         })
         .collect();
 
     let mut request = ChatMessageRequest::new(req.model.clone(), messages);
-    // Default to think=false when not specified — most OpenAI clients don't know about thinking mode
     let think = req.think.unwrap_or(false);
     request = request.think(if think { ThinkType::True } else { ThinkType::False });
 
@@ -135,6 +141,7 @@ async fn handle_chat(ollama: &Ollama, req: ChatRequest) -> anyhow::Result<Respon
     let response_message = ChatMessage {
         role: role.to_string(),
         content: res.message.content,
+        images: vec![],
     };
 
     let (prompt_tokens, completion_tokens) = res
@@ -174,12 +181,18 @@ async fn handle_chat_stream(
                 "assistant" => MessageRole::Assistant,
                 _ => MessageRole::User,
             };
-            OllamaChatMessage::new(role, m.content)
+            let mut msg = OllamaChatMessage::new(role, m.content);
+            if !m.images.is_empty() {
+                let images = m.images.into_iter()
+                    .map(ollama_rs::generation::images::Image::from_base64)
+                    .collect();
+                msg = msg.with_images(images);
+            }
+            msg
         })
         .collect();
 
     let mut request = ChatMessageRequest::new(req.model.clone(), messages);
-    // Default to think=false when not specified — most OpenAI clients don't know about thinking mode
     let think = req.think.unwrap_or(false);
     request = request.think(if think { ThinkType::True } else { ThinkType::False });
 

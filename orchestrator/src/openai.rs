@@ -32,7 +32,7 @@ pub struct OpenAIEmbeddingData {
 #[derive(Debug, Deserialize)]
 pub struct OpenAIChatRequest {
     pub model: String,
-    pub messages: Vec<OpenAIChatMessage>,
+    pub messages: Vec<OpenAIChatMessageRaw>,
     #[serde(default)]
     pub temperature: Option<f32>,
     #[serde(default)]
@@ -41,21 +41,43 @@ pub struct OpenAIChatRequest {
     pub think: Option<bool>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct OpenAIChatMessage {
     pub role: String,
-    #[serde(deserialize_with = "deserialize_content")]
     pub content: String,
 }
 
+/// Raw deserialization type — handles both string and array content formats.
+#[derive(Debug, Deserialize)]
+pub struct OpenAIChatMessageRaw {
+    pub role: String,
+    #[serde(rename = "content", deserialize_with = "deserialize_content")]
+    content_parsed: ParsedContent,
+}
+
+#[derive(Debug)]
+struct ParsedContent {
+    text: String,
+    images: Vec<String>,
+}
+
+impl OpenAIChatMessageRaw {
+    /// Convert to internal ChatMessage with images extracted.
+    pub fn into_chat_message(self) -> common::protocols::chat::ChatMessage {
+        common::protocols::chat::ChatMessage {
+            role: self.role,
+            content: self.content_parsed.text,
+            images: self.content_parsed.images,
+        }
+    }
+}
+
 /// OpenAI allows `content` to be either a string or an array of content parts.
-/// We flatten it to a string for simplicity.
-fn deserialize_content<'de, D>(deserializer: D) -> Result<String, D::Error>
+/// Extract text and base64 image data.
+fn deserialize_content<'de, D>(deserializer: D) -> Result<ParsedContent, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
-    use serde::de;
-
     #[derive(Deserialize)]
     #[serde(untagged)]
     enum Content {
@@ -64,20 +86,44 @@ where
     }
 
     #[derive(Deserialize)]
-    struct ContentPart {
-        #[serde(default)]
-        text: Option<String>,
+    #[serde(tag = "type")]
+    enum ContentPart {
+        #[serde(rename = "text")]
+        Text { text: String },
+        #[serde(rename = "image_url")]
+        ImageUrl { image_url: ImageUrl },
+    }
+
+    #[derive(Deserialize)]
+    struct ImageUrl {
+        url: String,
     }
 
     match Content::deserialize(deserializer)? {
-        Content::String(s) => Ok(s),
+        Content::String(s) => Ok(ParsedContent { text: s, images: vec![] }),
         Content::Parts(parts) => {
-            let text: String = parts
-                .into_iter()
-                .filter_map(|p| p.text)
-                .collect::<Vec<_>>()
-                .join("");
-            Ok(text)
+            let mut text_parts = Vec::new();
+            let mut images = Vec::new();
+
+            for part in parts {
+                match part {
+                    ContentPart::Text { text } => text_parts.push(text),
+                    ContentPart::ImageUrl { image_url } => {
+                        // Strip "data:image/...;base64," prefix if present
+                        let data = if let Some(pos) = image_url.url.find(";base64,") {
+                            image_url.url[pos + 8..].to_string()
+                        } else {
+                            image_url.url
+                        };
+                        images.push(data);
+                    }
+                }
+            }
+
+            Ok(ParsedContent {
+                text: text_parts.join(""),
+                images,
+            })
         }
     }
 }

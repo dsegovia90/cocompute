@@ -295,10 +295,7 @@ async fn create_chat_completion(
         messages: payload
             .messages
             .into_iter()
-            .map(|m| common::protocols::chat::ChatMessage {
-                role: m.role,
-                content: m.content,
-            })
+            .map(|m| m.into_chat_message())
             .collect(),
         temperature: payload.temperature,
         stream,
