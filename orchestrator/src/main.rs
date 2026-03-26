@@ -54,6 +54,7 @@ enum Command {
 #[derive(Clone)]
 struct AppState {
     endpoint: Endpoint,
+    endpoint_id: String,
     db: DatabaseConnection,
     hosts: HostManager,
 }
@@ -100,7 +101,8 @@ async fn main() -> anyhow::Result<()> {
                 .secret_key(secret_key)
                 .bind()
                 .await?;
-            tracing::info!("orchestrator endpoint id: {:?}", endpoint.addr().id);
+            let endpoint_id = format!("{}", endpoint.addr().id);
+            tracing::info!("orchestrator endpoint id: {endpoint_id}");
 
             let hosts = HostManager::new();
 
@@ -110,19 +112,22 @@ async fn main() -> anyhow::Result<()> {
                 .accept(protocols::ALPN, acceptor)
                 .spawn();
             tracing::info!("accepting host connections on ALPN cocompute/0");
-
             let state = AppState {
                 endpoint,
+                endpoint_id,
                 db: db.clone(),
                 hosts,
             };
 
             let app = Router::new()
+                // Authenticated routes
                 .route("/v1/models", get(list_models))
                 .route("/v1/embeddings", post(create_embeddings))
                 .route("/v1/chat/completions", post(create_chat_completion))
                 .route("/v1/stats", get(get_stats))
                 .route_layer(middleware::from_fn_with_state(db, auth::require_api_key))
+                // Unauthenticated routes (host discovery)
+                .route("/v1/node-info", get(get_node_info))
                 .with_state(state);
 
             let addr = format!("0.0.0.0:{}", args.port);
@@ -229,6 +234,16 @@ async fn list_models(
         "object": "list",
         "data": data,
     })))
+}
+
+/// GET /v1/node-info — Returns the orchestrator's current iroh endpoint ID.
+/// Unauthenticated — used by hosts to discover/refresh the orchestrator ID.
+async fn get_node_info(
+    State(state): State<AppState>,
+) -> Json<serde_json::Value> {
+    Json(serde_json::json!({
+        "endpoint_id": state.endpoint_id,
+    }))
 }
 
 /// POST /v1/embeddings — OpenAI-compatible embeddings endpoint.

@@ -29,9 +29,13 @@ struct Args {
     #[arg(long, default_value = "11434", env = "OLLAMA_PORT")]
     ollama_port: u16,
 
-    /// Orchestrator endpoint ID to connect to
+    /// Orchestrator HTTP URL for discovery (e.g. http://192.168.1.100:3000)
+    #[arg(long, env = "COCOMPUTE_ORCHESTRATOR_URL")]
+    orchestrator_url: String,
+
+    /// Orchestrator endpoint ID (optional — fetched from orchestrator if not provided)
     #[arg(long, env = "COCOMPUTE_ORCHESTRATOR_ID")]
-    orchestrator_id: String,
+    orchestrator_id: Option<String>,
 
     /// Path to persist the iroh secret key for stable EndpointId
     #[arg(long, default_value = "~/.cocompute/host.key", env = "COCOMPUTE_KEY_PATH")]
@@ -282,6 +286,22 @@ async fn discover_capabilities(ollama: &Ollama) -> anyhow::Result<Capabilities> 
     Ok(Capabilities { models: model_infos })
 }
 
+/// Fetch the orchestrator's endpoint ID from its HTTP API.
+async fn fetch_orchestrator_id(orchestrator_url: &str) -> anyhow::Result<String> {
+    let url = format!("{}/v1/node-info", orchestrator_url.trim_end_matches('/'));
+    let resp: serde_json::Value = reqwest::get(&url)
+        .await
+        .map_err(|e| anyhow::anyhow!("failed to reach orchestrator at {url}: {e}"))?
+        .json()
+        .await
+        .map_err(|e| anyhow::anyhow!("invalid response from orchestrator: {e}"))?;
+
+    resp["endpoint_id"]
+        .as_str()
+        .map(|s| s.to_string())
+        .ok_or_else(|| anyhow::anyhow!("orchestrator response missing endpoint_id"))
+}
+
 /// Connect to the orchestrator, register, then serve inference requests.
 async fn connect_and_serve(
     endpoint: &iroh::Endpoint,
@@ -382,12 +402,38 @@ async fn main() -> anyhow::Result<()> {
 
     let ollama = Ollama::new(args.ollama_url.clone(), args.ollama_port);
 
-    // Connect to orchestrator with reconnection loop
+    // Connect to orchestrator with reconnection loop.
+    // On each attempt, resolve the orchestrator ID (fetch from HTTP if not provided or stale).
+    let mut cached_id: Option<String> = args.orchestrator_id.clone();
+
     loop {
-        match connect_and_serve(&endpoint, &args.orchestrator_id, ollama.clone()).await {
+        // Resolve orchestrator ID
+        let orchestrator_id = match &cached_id {
+            Some(id) => id.clone(),
+            None => {
+                tracing::info!("fetching orchestrator endpoint ID from {}", args.orchestrator_url);
+                match fetch_orchestrator_id(&args.orchestrator_url).await {
+                    Ok(id) => {
+                        tracing::info!("orchestrator endpoint ID: {id}");
+                        cached_id = Some(id.clone());
+                        id
+                    }
+                    Err(e) => {
+                        tracing::error!("failed to fetch orchestrator ID: {e}");
+                        tracing::info!("retrying in 5 seconds...");
+                        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                        continue;
+                    }
+                }
+            }
+        };
+
+        match connect_and_serve(&endpoint, &orchestrator_id, ollama.clone()).await {
             Ok(()) => break,
             Err(e) => {
                 tracing::error!("disconnected from orchestrator: {e}");
+                // Clear cached ID so we re-fetch on next attempt (ID may have changed)
+                cached_id = None;
                 tracing::info!("reconnecting in 5 seconds...");
                 tokio::time::sleep(std::time::Duration::from_secs(5)).await;
             }
