@@ -37,6 +37,8 @@ pub struct OpenAIChatRequest {
     pub temperature: Option<f32>,
     #[serde(default)]
     pub stream: bool,
+    /// Controls thinking/reasoning mode. true = enable, false = disable.
+    pub think: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

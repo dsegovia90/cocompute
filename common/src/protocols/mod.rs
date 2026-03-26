@@ -47,6 +47,8 @@ pub enum Response {
 pub enum ChatStreamFrame {
     /// A content chunk.
     Delta(String),
+    /// A thinking/reasoning chunk (for thinking models).
+    Thinking(String),
     /// Final frame with metering. No more frames after this.
     Done(Metering),
 }

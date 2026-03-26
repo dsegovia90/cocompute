@@ -14,6 +14,8 @@ pub struct ChatRequest {
     pub temperature: Option<f32>,
     #[serde(default)]
     pub stream: bool,
+    /// Controls thinking/reasoning. None = model default, Some(true) = enable, Some(false) = disable.
+    pub think: Option<bool>,
 }
 
 #[derive(Debug, Encode, Decode, Serialize)]

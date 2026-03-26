@@ -24,10 +24,13 @@ pub async fn write_frame<T>(send_stream: &mut SendStream, message: T) -> anyhow:
 where
     T: Encode + std::fmt::Debug,
 {
+    use tokio::io::AsyncWriteExt as _;
+
     let encoded = bitcode::encode(&message);
 
     send_stream.write_u32(encoded.len() as u32).await?;
     send_stream.write_all(&encoded).await?;
+    send_stream.flush().await?;
 
     Ok(())
 }

@@ -35,6 +35,10 @@ struct Args {
     #[arg(long, default_value = "./cocompute.db", env = "COCOMPUTE_DB_PATH", global = true)]
     db_path: String,
 
+    /// Path to persist the iroh secret key for stable EndpointId
+    #[arg(long, default_value = "~/.cocompute/orchestrator.key", env = "COCOMPUTE_KEY_PATH", global = true)]
+    key_path: String,
+
     #[command(subcommand)]
     command: Option<Command>,
 }
@@ -89,7 +93,13 @@ async fn main() -> anyhow::Result<()> {
         Command::Serve => {
             tracing::info!("database initialized at {}", args.db_path);
 
-            let endpoint = Endpoint::bind(iroh::endpoint::presets::N0).await?;
+            let key_path = common::key::expand_tilde(&args.key_path);
+            let secret_key = common::key::load_or_create_secret_key(&key_path)?;
+
+            let endpoint = Endpoint::builder(iroh::endpoint::presets::N0)
+                .secret_key(secret_key)
+                .bind()
+                .await?;
             tracing::info!("orchestrator endpoint id: {:?}", endpoint.addr().id);
 
             let hosts = HostManager::new();
@@ -108,6 +118,7 @@ async fn main() -> anyhow::Result<()> {
             };
 
             let app = Router::new()
+                .route("/v1/models", get(list_models))
                 .route("/v1/embeddings", post(create_embeddings))
                 .route("/v1/chat/completions", post(create_chat_completion))
                 .route("/v1/stats", get(get_stats))
@@ -197,6 +208,29 @@ fn log_metering(
     });
 }
 
+/// GET /v1/models — OpenAI-compatible model listing.
+async fn list_models(
+    State(state): State<AppState>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let models = state.hosts.available_models().await;
+
+    let data: Vec<serde_json::Value> = models
+        .into_iter()
+        .map(|name| {
+            serde_json::json!({
+                "id": name,
+                "object": "model",
+                "owned_by": "cocompute",
+            })
+        })
+        .collect();
+
+    Ok(Json(serde_json::json!({
+        "object": "list",
+        "data": data,
+    })))
+}
+
 /// POST /v1/embeddings — OpenAI-compatible embeddings endpoint.
 async fn create_embeddings(
     State(state): State<AppState>,
@@ -253,6 +287,7 @@ async fn create_chat_completion(
             .collect(),
         temperature: payload.temperature,
         stream,
+        think: payload.think,
     };
 
     if stream {
@@ -383,6 +418,23 @@ async fn create_chat_completion_stream(
                             delta: OpenAIChatStreamDelta {
                                 role: None,
                                 content: Some(content),
+                            },
+                            finish_reason: None,
+                        }],
+                    }).unwrap()));
+                }
+                Ok(Some(ChatStreamFrame::Thinking(thinking))) => {
+                    // Forward thinking as content — most clients display it inline
+                    yield Ok(Event::default().data(serde_json::to_string(&OpenAIChatStreamChunk {
+                        id: chat_id.clone(),
+                        object: "chat.completion.chunk",
+                        created,
+                        model: model.clone(),
+                        choices: vec![OpenAIChatStreamChoice {
+                            index: 0,
+                            delta: OpenAIChatStreamDelta {
+                                role: None,
+                                content: Some(thinking),
                             },
                             finish_reason: None,
                         }],

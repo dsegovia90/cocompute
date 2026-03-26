@@ -40,6 +40,7 @@ fn chat_request_roundtrip() {
         ],
         temperature: Some(0.7),
         stream: false,
+        think: None,
     };
     let decoded: ChatRequest = roundtrip(&req);
     assert_eq!(decoded.model, "llama3:latest");
@@ -56,6 +57,7 @@ fn chat_request_no_temperature_roundtrip() {
         messages: vec![ChatMessage { role: "user".into(), content: "Hi".into() }],
         temperature: None,
         stream: false,
+        think: None,
     };
     let decoded: ChatRequest = roundtrip(&req);
     assert_eq!(decoded.temperature, None);
@@ -143,6 +145,7 @@ fn request_enum_chat_roundtrip() {
         messages: vec![ChatMessage { role: "user".into(), content: "Hi".into() }],
         temperature: None,
         stream: false,
+        think: None,
     });
     let decoded: Request = roundtrip(&req);
     assert!(matches!(decoded, Request::Chat(_)));
@@ -227,9 +230,11 @@ fn chat_request_stream_true_roundtrip() {
         messages: vec![ChatMessage { role: "user".into(), content: "Hi".into() }],
         temperature: None,
         stream: true,
+        think: Some(false),
     };
     let decoded: ChatRequest = roundtrip(&req);
     assert!(decoded.stream);
+    assert_eq!(decoded.think, Some(false));
 }
 
 #[test]

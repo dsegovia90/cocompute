@@ -96,6 +96,7 @@ async fn handle_embeddings(ollama: &Ollama, req: EmbeddingsRequest) -> anyhow::R
 
 async fn handle_chat(ollama: &Ollama, req: ChatRequest) -> anyhow::Result<Response> {
     use ollama_rs::generation::chat::MessageRole;
+    use ollama_rs::generation::parameters::ThinkType;
 
     let messages: Vec<OllamaChatMessage> = req
         .messages
@@ -110,7 +111,10 @@ async fn handle_chat(ollama: &Ollama, req: ChatRequest) -> anyhow::Result<Respon
         })
         .collect();
 
-    let request = ChatMessageRequest::new(req.model.clone(), messages);
+    let mut request = ChatMessageRequest::new(req.model.clone(), messages);
+    if let Some(think) = req.think {
+        request = request.think(if think { ThinkType::True } else { ThinkType::False });
+    }
 
     let start = std::time::Instant::now();
     let res = ollama
@@ -156,6 +160,7 @@ async fn handle_chat_stream(
     use common::helpers::write_frame;
     use common::protocols::ChatStreamFrame;
     use ollama_rs::generation::chat::MessageRole;
+    use ollama_rs::generation::parameters::ThinkType;
     use tokio_stream::StreamExt;
 
     let messages: Vec<OllamaChatMessage> = req
@@ -171,7 +176,10 @@ async fn handle_chat_stream(
         })
         .collect();
 
-    let request = ChatMessageRequest::new(req.model.clone(), messages);
+    let mut request = ChatMessageRequest::new(req.model.clone(), messages);
+    if let Some(think) = req.think {
+        request = request.think(if think { ThinkType::True } else { ThinkType::False });
+    }
 
     // Signal that we're starting a stream
     write_frame(send, Response::ChatStreamStart).await?;
@@ -185,15 +193,29 @@ async fn handle_chat_stream(
     let mut prompt_tokens: u32 = 0;
     let mut completion_tokens: u32 = 0;
 
+    let mut chunk_count = 0u32;
     while let Some(chunk) = stream.next().await {
         match chunk {
             Ok(resp) => {
+                // Forward content (actual response tokens)
                 let content = resp.message.content.clone();
                 if !content.is_empty() {
+                    chunk_count += 1;
+                    tracing::debug!("streaming chunk #{chunk_count}: {:?}", &content);
                     write_frame(send, ChatStreamFrame::Delta(content)).await?;
                 }
 
+                // Forward thinking content if present (reasoning models)
+                if let Some(ref thinking) = resp.message.thinking {
+                    if !thinking.is_empty() {
+                        chunk_count += 1;
+                        tracing::debug!("streaming thinking chunk #{chunk_count}");
+                        write_frame(send, ChatStreamFrame::Thinking(thinking.clone())).await?;
+                    }
+                }
+
                 if resp.done {
+                    tracing::debug!("ollama stream done after {chunk_count} chunks");
                     if let Some(final_data) = resp.final_data {
                         prompt_tokens = final_data.prompt_eval_count as u32;
                         completion_tokens = final_data.eval_count as u32;
@@ -206,6 +228,7 @@ async fn handle_chat_stream(
             }
         }
     }
+    tracing::debug!("ollama stream ended, sent {chunk_count} chunks");
 
     let compute_ms = start.elapsed().as_millis() as u64;
 
@@ -338,35 +361,6 @@ async fn connect_and_serve(
     }
 }
 
-/// Expand ~ to the user's home directory
-fn expand_tilde(path: &str) -> PathBuf {
-    if let Some(rest) = path.strip_prefix("~/") {
-        if let Some(home) = std::env::var_os("HOME").map(PathBuf::from) {
-            return home.join(rest);
-        }
-    }
-    PathBuf::from(path)
-}
-
-/// Load or generate an iroh secret key for stable EndpointId across restarts
-fn load_or_create_secret_key(key_path: &PathBuf) -> anyhow::Result<iroh::SecretKey> {
-    if key_path.exists() {
-        let bytes = std::fs::read(key_path).context("failed to read key file")?;
-        let key_bytes: [u8; 32] = bytes
-            .try_into()
-            .map_err(|_| anyhow::anyhow!("invalid key file length"))?;
-        Ok(iroh::SecretKey::from_bytes(&key_bytes))
-    } else {
-        let key = iroh::SecretKey::generate(&mut rand::rng());
-        if let Some(parent) = key_path.parent() {
-            std::fs::create_dir_all(parent).context("failed to create key directory")?;
-        }
-        std::fs::write(key_path, key.to_bytes()).context("failed to write key file")?;
-        tracing::info!("generated new host key at {}", key_path.display());
-        Ok(key)
-    }
-}
-
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
@@ -377,9 +371,9 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let args = Args::parse();
-    let key_path = expand_tilde(&args.key_path);
+    let key_path = common::key::expand_tilde(&args.key_path);
 
-    let secret_key = load_or_create_secret_key(&key_path)?;
+    let secret_key = common::key::load_or_create_secret_key(&key_path)?;
 
     let endpoint = iroh::Endpoint::builder(iroh::endpoint::presets::N0)
         .secret_key(secret_key)
