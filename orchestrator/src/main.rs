@@ -130,7 +130,7 @@ async fn main() -> anyhow::Result<()> {
                 // Unauthenticated routes (host discovery + updates)
                 .route("/v1/node-info", get(get_node_info))
                 .route("/v1/version", get(get_version))
-                .route("/v1/update/:platform", get(get_update))
+                .route("/v1/update/{platform}", get(get_update))
                 .layer(tower_http::trace::TraceLayer::new_for_http())
                 .with_state(state);
 
