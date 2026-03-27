@@ -344,6 +344,7 @@ async fn create_chat_completion(
         temperature: payload.temperature,
         stream,
         think: payload.think,
+        tools: openai::OpenAIChatMessageRaw::convert_tools(payload.tools),
     };
 
     if stream {
@@ -377,11 +378,29 @@ async fn create_chat_completion_sync(
                 model,
                 choices: vec![OpenAIChatChoice {
                     index: 0,
-                    message: OpenAIChatMessage {
-                        role: result.message.role,
-                        content: result.message.content,
+                    message: {
+                        let tool_calls: Option<Vec<serde_json::Value>> = if result.message.tool_calls.is_empty() {
+                            None
+                        } else {
+                            Some(result.message.tool_calls.iter().map(|tc| {
+                                serde_json::json!({
+                                    "id": tc.id,
+                                    "type": tc.call_type,
+                                    "function": {
+                                        "name": tc.function.name,
+                                        "arguments": tc.function.arguments,
+                                    }
+                                })
+                            }).collect())
+                        };
+                        OpenAIChatMessage {
+                            role: result.message.role,
+                            content: if result.message.content.is_empty() && tool_calls.is_some() { None } else { Some(result.message.content) },
+                            tool_calls,
+                            tool_call_id: None,
+                        }
                     },
-                    finish_reason: "stop",
+                    finish_reason: if result.message.tool_calls.is_empty() { "stop" } else { "tool_calls" },
                 }],
                 usage: OpenAIUsage::from_metering(&metering),
             })

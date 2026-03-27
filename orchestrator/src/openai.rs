@@ -39,20 +39,32 @@ pub struct OpenAIChatRequest {
     pub stream: bool,
     /// Controls thinking/reasoning mode. true = enable, false = disable.
     pub think: Option<bool>,
+    /// Tool definitions for function calling.
+    #[serde(default)]
+    pub tools: Vec<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct OpenAIChatMessage {
     pub role: String,
-    pub content: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_calls: Option<Vec<serde_json::Value>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_call_id: Option<String>,
 }
 
 /// Raw deserialization type — handles both string and array content formats.
 #[derive(Debug, Deserialize)]
 pub struct OpenAIChatMessageRaw {
     pub role: String,
-    #[serde(rename = "content", deserialize_with = "deserialize_content")]
-    content_parsed: ParsedContent,
+    #[serde(rename = "content", default, deserialize_with = "deserialize_content_option")]
+    content_parsed: Option<ParsedContent>,
+    #[serde(default)]
+    pub tool_calls: Vec<serde_json::Value>,
+    #[serde(default)]
+    pub tool_call_id: Option<String>,
 }
 
 #[derive(Debug)]
@@ -62,25 +74,57 @@ struct ParsedContent {
 }
 
 impl OpenAIChatMessageRaw {
-    /// Convert to internal ChatMessage with images extracted.
+    /// Convert to internal ChatMessage with images and tool calls extracted.
     pub fn into_chat_message(self) -> common::protocols::chat::ChatMessage {
+        use common::protocols::chat::{ToolCall, ToolCallFunction};
+
+        let parsed = self.content_parsed.unwrap_or(ParsedContent { text: String::new(), images: vec![] });
+
+        let tool_calls: Vec<ToolCall> = self.tool_calls.into_iter().map(|tc| {
+            ToolCall {
+                id: tc["id"].as_str().unwrap_or("").to_string(),
+                call_type: tc["type"].as_str().unwrap_or("function").to_string(),
+                function: ToolCallFunction {
+                    name: tc["function"]["name"].as_str().unwrap_or("").to_string(),
+                    arguments: tc["function"]["arguments"].as_str()
+                        .unwrap_or(&tc["function"]["arguments"].to_string())
+                        .to_string(),
+                },
+            }
+        }).collect();
+
         common::protocols::chat::ChatMessage {
             role: self.role,
-            content: self.content_parsed.text,
-            images: self.content_parsed.images,
+            content: parsed.text,
+            images: parsed.images,
+            tool_calls,
+            tool_call_id: self.tool_call_id,
         }
+    }
+
+    /// Convert tool definitions from raw JSON to internal format.
+    pub fn convert_tools(tools: Vec<serde_json::Value>) -> Vec<common::protocols::chat::ToolDefinition> {
+        tools.into_iter().map(|t| {
+            common::protocols::chat::ToolDefinition {
+                tool_type: t["type"].as_str().unwrap_or("function").to_string(),
+                function: common::protocols::chat::ToolFunctionDef {
+                    name: t["function"]["name"].as_str().unwrap_or("").to_string(),
+                    description: t["function"]["description"].as_str().unwrap_or("").to_string(),
+                    parameters: t["function"]["parameters"].to_string(),
+                },
+            }
+        }).collect()
     }
 }
 
-/// OpenAI allows `content` to be either a string or an array of content parts.
-/// Extract text and base64 image data.
-fn deserialize_content<'de, D>(deserializer: D) -> Result<ParsedContent, D::Error>
+/// OpenAI allows `content` to be null, a string, or an array of content parts.
+fn deserialize_content_option<'de, D>(deserializer: D) -> Result<Option<ParsedContent>, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
     #[derive(Deserialize)]
     #[serde(untagged)]
-    enum Content {
+    enum ContentInner {
         String(String),
         Parts(Vec<ContentPart>),
     }
@@ -99,17 +143,18 @@ where
         url: String,
     }
 
-    match Content::deserialize(deserializer)? {
-        Content::String(s) => Ok(ParsedContent { text: s, images: vec![] }),
-        Content::Parts(parts) => {
+    let opt: Option<ContentInner> = Option::deserialize(deserializer)?;
+
+    match opt {
+        None => Ok(None),
+        Some(ContentInner::String(s)) => Ok(Some(ParsedContent { text: s, images: vec![] })),
+        Some(ContentInner::Parts(parts)) => {
             let mut text_parts = Vec::new();
             let mut images = Vec::new();
-
             for part in parts {
                 match part {
                     ContentPart::Text { text } => text_parts.push(text),
                     ContentPart::ImageUrl { image_url } => {
-                        // Strip "data:image/...;base64," prefix if present
                         let data = if let Some(pos) = image_url.url.find(";base64,") {
                             image_url.url[pos + 8..].to_string()
                         } else {
@@ -119,11 +164,7 @@ where
                     }
                 }
             }
-
-            Ok(ParsedContent {
-                text: text_parts.join(""),
-                images,
-            })
+            Ok(Some(ParsedContent { text: text_parts.join(""), images }))
         }
     }
 }
@@ -233,7 +274,7 @@ mod tests {
             model: "llama3:latest".into(),
             choices: vec![OpenAIChatChoice {
                 index: 0,
-                message: OpenAIChatMessage { role: "assistant".into(), content: "Hi!".into() },
+                message: OpenAIChatMessage { role: "assistant".into(), content: Some("Hi!".into()), tool_calls: None, tool_call_id: None },
                 finish_reason: "stop",
             }],
             usage: OpenAIUsage { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
