@@ -7,3 +7,7 @@ anyhow = "1.0"
 iroh = "0.97.0"
 serde = { version = "1.0.228", features = ["derive"] }
 tokio = { version = "1.50.0", features = ["macros", "rt-multi-thread", "signal"] }
+
+[profile.release]
+strip = true
+lto = true
