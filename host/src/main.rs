@@ -22,24 +22,39 @@ use ollama_rs::{
 #[command(name = "cocompute-host", version)]
 struct Args {
     /// Ollama server URL
-    #[arg(long, default_value = "http://localhost", env = "OLLAMA_URL")]
+    #[arg(long, default_value = "http://localhost", env = "OLLAMA_URL", global = true)]
     ollama_url: String,
 
     /// Ollama server port
-    #[arg(long, default_value = "11434", env = "OLLAMA_PORT")]
+    #[arg(long, default_value = "11434", env = "OLLAMA_PORT", global = true)]
     ollama_port: u16,
 
     /// Orchestrator HTTP URL for discovery (e.g. http://192.168.1.100:3000)
-    #[arg(long, env = "COCOMPUTE_ORCHESTRATOR_URL")]
+    #[arg(long, env = "COCOMPUTE_ORCHESTRATOR_URL", global = true)]
     orchestrator_url: String,
 
     /// Orchestrator endpoint ID (optional — fetched from orchestrator if not provided)
-    #[arg(long, env = "COCOMPUTE_ORCHESTRATOR_ID")]
+    #[arg(long, env = "COCOMPUTE_ORCHESTRATOR_ID", global = true)]
     orchestrator_id: Option<String>,
 
     /// Path to persist the iroh secret key for stable EndpointId
-    #[arg(long, default_value = "~/.cocompute/host.key", env = "COCOMPUTE_KEY_PATH")]
+    #[arg(long, default_value = "~/.cocompute/host.key", env = "COCOMPUTE_KEY_PATH", global = true)]
     key_path: String,
+
+    /// Automatically check for updates on startup
+    #[arg(long, default_value = "false", env = "COCOMPUTE_AUTO_UPDATE")]
+    auto_update: bool,
+
+    #[command(subcommand)]
+    command: Option<Command>,
+}
+
+#[derive(clap::Subcommand, Debug)]
+enum Command {
+    /// Check for and install updates from the orchestrator
+    SelfUpdate,
+    /// Start the host (default)
+    Run,
 }
 
 /// Handle a single inference stream from the orchestrator.
@@ -392,6 +407,103 @@ async fn connect_and_serve(
     }
 }
 
+/// Detect the current platform string for update downloads.
+fn current_platform() -> &'static str {
+    match (std::env::consts::OS, std::env::consts::ARCH) {
+        ("linux", "x86_64") => "linux-x86_64",
+        ("linux", "aarch64") => "linux-arm64",
+        ("macos", "aarch64") => "macos-arm64",
+        ("macos", "x86_64") => "macos-x86_64",
+        (os, arch) => {
+            tracing::warn!("unknown platform: {os}/{arch}");
+            "unknown"
+        }
+    }
+}
+
+/// Check the orchestrator for a newer version and return it if available.
+/// Only triggers on upgrades (remote > local), never downgrades.
+async fn check_for_update(orchestrator_url: &str) -> anyhow::Result<Option<String>> {
+    let url = format!("{}/v1/version", orchestrator_url.trim_end_matches('/'));
+    let resp: serde_json::Value = reqwest::get(&url).await?.json().await?;
+
+    let remote_str = resp["version"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("missing version in response"))?;
+
+    let local_str = env!("CARGO_PKG_VERSION");
+
+    let remote: semver::Version = remote_str.parse()
+        .map_err(|e| anyhow::anyhow!("invalid remote version '{remote_str}': {e}"))?;
+    let local: semver::Version = local_str.parse()
+        .map_err(|e| anyhow::anyhow!("invalid local version '{local_str}': {e}"))?;
+
+    if remote > local {
+        Ok(Some(remote_str.to_string()))
+    } else {
+        Ok(None)
+    }
+}
+
+/// Download the new binary from the orchestrator and replace the current executable.
+async fn perform_update(orchestrator_url: &str) -> anyhow::Result<()> {
+    let platform = current_platform();
+    if platform == "unknown" {
+        anyhow::bail!("cannot update: unknown platform");
+    }
+
+    let url = format!(
+        "{}/v1/update/{platform}",
+        orchestrator_url.trim_end_matches('/')
+    );
+
+    tracing::info!("downloading update for {platform}...");
+    let response = reqwest::get(&url).await?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let body = response.text().await.unwrap_or_default();
+        anyhow::bail!("update download failed: {status} {body}");
+    }
+
+    let bytes = response.bytes().await?;
+    tracing::info!("downloaded {} bytes", bytes.len());
+
+    // Get path to current executable
+    let current_exe = std::env::current_exe()?;
+    let backup_path = current_exe.with_extension("old");
+    let temp_path = current_exe.with_extension("new");
+
+    // Write new binary to temp file
+    tokio::fs::write(&temp_path, &bytes).await?;
+
+    // Make executable
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        tokio::fs::set_permissions(&temp_path, std::fs::Permissions::from_mode(0o755)).await?;
+    }
+
+    // Atomic swap: current → backup, new → current
+    if backup_path.exists() {
+        tokio::fs::remove_file(&backup_path).await.ok();
+    }
+    tokio::fs::rename(&current_exe, &backup_path).await?;
+
+    if let Err(e) = tokio::fs::rename(&temp_path, &current_exe).await {
+        // Rollback: restore the backup so we're not left with no binary
+        tracing::error!("failed to install new binary: {e}. rolling back...");
+        tokio::fs::rename(&backup_path, &current_exe).await.ok();
+        anyhow::bail!("update failed, rolled back to previous version: {e}");
+    }
+
+    // Clean up backup
+    tokio::fs::remove_file(&backup_path).await.ok();
+
+    tracing::info!("update complete. restart to use the new version.");
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
@@ -402,8 +514,54 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let args = Args::parse();
-    let key_path = common::key::expand_tilde(&args.key_path);
 
+    // Handle self-update subcommand
+    if matches!(args.command, Some(Command::SelfUpdate)) {
+        tracing::info!("checking for updates from {}", args.orchestrator_url);
+        match check_for_update(&args.orchestrator_url).await? {
+            Some(new_version) => {
+                let local = env!("CARGO_PKG_VERSION");
+                tracing::info!("update available: {local} → {new_version}");
+                perform_update(&args.orchestrator_url).await?;
+            }
+            None => {
+                tracing::info!("already on latest version ({})", env!("CARGO_PKG_VERSION"));
+            }
+        }
+        return Ok(());
+    }
+
+    // Auto-update check on startup
+    if args.auto_update {
+        tracing::info!("checking for updates...");
+        match check_for_update(&args.orchestrator_url).await {
+            Ok(Some(new_version)) => {
+                let local = env!("CARGO_PKG_VERSION");
+                tracing::info!("update available: {local} → {new_version}. updating...");
+                match perform_update(&args.orchestrator_url).await {
+                    Ok(()) => {
+                        tracing::info!("update installed. restarting...");
+                        // Re-exec ourselves with the same args
+                        let exe = std::env::current_exe()?;
+                        let args: Vec<String> = std::env::args().collect();
+                        let err = exec::execvp(&exe, &args);
+                        anyhow::bail!("failed to restart after update: {err}");
+                    }
+                    Err(e) => {
+                        tracing::warn!("auto-update failed: {e}. continuing with current version.");
+                    }
+                }
+            }
+            Ok(None) => {
+                tracing::info!("up to date ({})", env!("CARGO_PKG_VERSION"));
+            }
+            Err(e) => {
+                tracing::warn!("update check failed: {e}. continuing with current version.");
+            }
+        }
+    }
+
+    let key_path = common::key::expand_tilde(&args.key_path);
     let secret_key = common::key::load_or_create_secret_key(&key_path)?;
 
     let endpoint = iroh::Endpoint::builder(iroh::endpoint::presets::N0)
@@ -416,11 +574,9 @@ async fn main() -> anyhow::Result<()> {
     let ollama = Ollama::new(args.ollama_url.clone(), args.ollama_port);
 
     // Connect to orchestrator with reconnection loop.
-    // On each attempt, resolve the orchestrator ID (fetch from HTTP if not provided or stale).
     let mut cached_id: Option<String> = args.orchestrator_id.clone();
 
     loop {
-        // Resolve orchestrator ID
         let orchestrator_id = match &cached_id {
             Some(id) => id.clone(),
             None => {
@@ -445,7 +601,6 @@ async fn main() -> anyhow::Result<()> {
             Ok(()) => break,
             Err(e) => {
                 tracing::error!("disconnected from orchestrator: {e}");
-                // Clear cached ID so we re-fetch on next attempt (ID may have changed)
                 cached_id = None;
                 tracing::info!("reconnecting in 5 seconds...");
                 tokio::time::sleep(std::time::Duration::from_secs(5)).await;

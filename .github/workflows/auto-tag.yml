@@ -1,0 +1,58 @@
+name: Auto-tag on version bump
+
+on:
+  push:
+    branches:
+      - master
+      - main
+    paths:
+      - "Cargo.toml"
+
+permissions:
+  contents: write
+
+jobs:
+  auto-tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Detect version change
+        id: version
+        run: |
+          # Get current version from workspace Cargo.toml
+          CURRENT=$(grep -A1 '\[workspace.package\]' Cargo.toml | grep 'version' | sed 's/.*"\(.*\)".*/\1/')
+
+          # Get previous version
+          git show HEAD~1:Cargo.toml > /tmp/old-cargo.toml 2>/dev/null || echo -e '[workspace.package]\nversion = "0.0.0"' > /tmp/old-cargo.toml
+          PREVIOUS=$(grep -A1 '\[workspace.package\]' /tmp/old-cargo.toml | grep 'version' | sed 's/.*"\(.*\)".*/\1/')
+
+          echo "current=$CURRENT"
+          echo "previous=$PREVIOUS"
+
+          if [ "$CURRENT" != "$PREVIOUS" ]; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "version=$CURRENT" >> $GITHUB_OUTPUT
+            echo "Version changed: $PREVIOUS → $CURRENT"
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "Version unchanged: $CURRENT"
+          fi
+
+      - name: Create tag
+        if: steps.version.outputs.changed == 'true'
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          TAG="v$VERSION"
+
+          # Check if tag already exists
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists, skipping"
+            exit 0
+          fi
+
+          git tag "$TAG"
+          git push origin "$TAG"
+          echo "Created and pushed tag: $TAG"
