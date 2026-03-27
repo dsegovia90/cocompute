@@ -1,4 +1,5 @@
-use axum::{Json, Router, extract::State, middleware, response::IntoResponse, routing::{get, post}};
+use axum::{Extension, Json, Router, extract::State, middleware, response::IntoResponse, routing::{get, post}};
+use auth::ApiKeyId;
 use axum::response::sse::{Event, Sse};
 use clap::{Parser, Subcommand};
 use common::{
@@ -25,7 +26,7 @@ mod host_manager;
 mod openai;
 
 #[derive(Parser, Debug)]
-#[command(name = "cocompute-orchestrator")]
+#[command(name = "cocompute-orchestrator", version)]
 struct Args {
     /// Port to listen on
     #[arg(long, default_value = "3000", env = "COCOMPUTE_PORT", global = true)]
@@ -194,6 +195,7 @@ fn log_metering(
     model: String,
     request_type: String,
     metering: &Metering,
+    api_key_id: Option<i32>,
 ) {
     let m = metering.clone();
     tokio::spawn(async move {
@@ -205,6 +207,7 @@ fn log_metering(
             completion_tokens: Set(m.completion_tokens as i32),
             compute_ms: Set(m.compute_ms as i64),
             created_at: Set(chrono::Utc::now()),
+            api_key_id: Set(api_key_id),
             ..Default::default()
         };
         if let Err(e) = record.insert(&db).await {
@@ -243,12 +246,14 @@ async fn get_node_info(
 ) -> Json<serde_json::Value> {
     Json(serde_json::json!({
         "endpoint_id": state.endpoint_id,
+        "version": env!("CARGO_PKG_VERSION"),
     }))
 }
 
 /// POST /v1/embeddings — OpenAI-compatible embeddings endpoint.
 async fn create_embeddings(
     State(state): State<AppState>,
+    Extension(api_key_id): Extension<ApiKeyId>,
     Json(payload): Json<OpenAIEmbeddingsRequest>,
 ) -> Result<Json<OpenAIEmbeddingsResponse>, AppError> {
     let model = payload.model.clone();
@@ -264,7 +269,7 @@ async fn create_embeddings(
 
     match response {
         Response::Embeddings { result, ref metering } => {
-            log_metering(state.db.clone(), host_id, model.clone(), "embeddings".into(), metering);
+            log_metering(state.db.clone(), host_id, model.clone(), "embeddings".into(), metering, Some(api_key_id.0));
             Ok(Json(OpenAIEmbeddingsResponse {
                 object: "list",
                 data: vec![OpenAIEmbeddingData {
@@ -284,6 +289,7 @@ async fn create_embeddings(
 /// Supports both streaming (SSE) and non-streaming responses.
 async fn create_chat_completion(
     State(state): State<AppState>,
+    Extension(api_key_id): Extension<ApiKeyId>,
     Json(payload): Json<OpenAIChatRequest>,
 ) -> Result<axum::response::Response, AppError> {
     let model = payload.model.clone();
@@ -303,9 +309,9 @@ async fn create_chat_completion(
     };
 
     if stream {
-        create_chat_completion_stream(state, model, internal_request).await
+        create_chat_completion_stream(state, model, internal_request, api_key_id.0).await
     } else {
-        create_chat_completion_sync(state, model, internal_request).await
+        create_chat_completion_sync(state, model, internal_request, api_key_id.0).await
     }
 }
 
@@ -313,13 +319,14 @@ async fn create_chat_completion_sync(
     state: AppState,
     model: String,
     internal_request: common::protocols::chat::ChatRequest,
+    api_key_id: i32,
 ) -> Result<axum::response::Response, AppError> {
     let request = Request::Chat(internal_request);
     let (response, host_id) = route_to_host(&state, &model, request).await?;
 
     match response {
         Response::Chat { result, ref metering } => {
-            log_metering(state.db.clone(), host_id, model.clone(), "chat".into(), metering);
+            log_metering(state.db.clone(), host_id, model.clone(), "chat".into(), metering, Some(api_key_id));
             let created = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap_or_default()
@@ -350,6 +357,7 @@ async fn create_chat_completion_stream(
     state: AppState,
     model: String,
     internal_request: common::protocols::chat::ChatRequest,
+    api_key_id: i32,
 ) -> Result<axum::response::Response, AppError> {
     let request = Request::Chat(internal_request);
 
@@ -453,7 +461,7 @@ async fn create_chat_completion_stream(
                     }).unwrap()));
                 }
                 Ok(Some(ChatStreamFrame::Done(metering))) => {
-                    log_metering(db.clone(), host_id.clone(), model_clone.clone(), "chat_stream".into(), &metering);
+                    log_metering(db.clone(), host_id.clone(), model_clone.clone(), "chat_stream".into(), &metering, Some(api_key_id));
 
                     // Final chunk with finish_reason
                     yield Ok(Event::default().data(serde_json::to_string(&OpenAIChatStreamChunk {

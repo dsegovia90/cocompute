@@ -19,7 +19,7 @@ use ollama_rs::{
 };
 
 #[derive(Parser, Debug)]
-#[command(name = "cocompute-host")]
+#[command(name = "cocompute-host", version)]
 struct Args {
     /// Ollama server URL
     #[arg(long, default_value = "http://localhost", env = "OLLAMA_URL")]

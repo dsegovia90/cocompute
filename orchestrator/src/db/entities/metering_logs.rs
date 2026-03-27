@@ -12,6 +12,7 @@ pub struct Model {
     pub completion_tokens: i32,
     pub compute_ms: i64,
     pub created_at: DateTimeUtc,
+    pub api_key_id: Option<i32>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

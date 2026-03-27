@@ -4,6 +4,10 @@ use axum::{
     middleware::Next,
     response::Response,
 };
+
+/// The authenticated API key's database ID, inserted into request extensions by the auth middleware.
+#[derive(Clone, Copy, Debug)]
+pub struct ApiKeyId(pub i32);
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 use sha2::{Digest, Sha256};
 
@@ -49,9 +53,13 @@ pub async fn require_api_key(
         .await
         .map_err(|e| AppError::Internal(anyhow::anyhow!("db error: {e}")))?;
 
-    if exists.is_none() {
-        return Err(AppError::Unauthorized);
-    }
+    let api_key = match exists {
+        Some(key) => key,
+        None => return Err(AppError::Unauthorized),
+    };
+
+    let mut request = request;
+    request.extensions_mut().insert(ApiKeyId(api_key.id));
 
     Ok(next.run(request).await)
 }

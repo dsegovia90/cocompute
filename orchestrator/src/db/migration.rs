@@ -9,6 +9,7 @@ impl MigratorTrait for Migrator {
             Box::new(M20260325CreateApiKeys),
             Box::new(M20260325CreateHosts),
             Box::new(M20260325CreateMeteringLogs),
+            Box::new(M20260327AddApiKeyIdToMeteringLogs),
         ]
     }
 }
@@ -144,4 +145,38 @@ enum MeteringLogs {
     CompletionTokens,
     ComputeMs,
     CreatedAt,
+    ApiKeyId,
+}
+
+struct M20260327AddApiKeyIdToMeteringLogs;
+
+impl MigrationName for M20260327AddApiKeyIdToMeteringLogs {
+    fn name(&self) -> &str {
+        "m20260327_add_api_key_id_to_metering_logs"
+    }
+}
+
+#[async_trait::async_trait]
+impl MigrationTrait for M20260327AddApiKeyIdToMeteringLogs {
+    async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        manager
+            .alter_table(
+                Table::alter()
+                    .table(MeteringLogs::Table)
+                    .add_column(ColumnDef::new(MeteringLogs::ApiKeyId).integer().null())
+                    .to_owned(),
+            )
+            .await
+    }
+
+    async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        manager
+            .alter_table(
+                Table::alter()
+                    .table(MeteringLogs::Table)
+                    .drop_column(MeteringLogs::ApiKeyId)
+                    .to_owned(),
+            )
+            .await
+    }
 }
