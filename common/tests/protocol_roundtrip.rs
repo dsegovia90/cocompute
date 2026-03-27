@@ -35,12 +35,13 @@ fn chat_request_roundtrip() {
     let req = ChatRequest {
         model: "llama3:latest".into(),
         messages: vec![
-            ChatMessage { images: vec![], role: "system".into(), content: "You are helpful.".into() },
-            ChatMessage { images: vec![], role: "user".into(), content: "Hello".into() },
+            ChatMessage { images: vec![], tool_calls: vec![], tool_call_id: None, role: "system".into(), content: "You are helpful.".into() },
+            ChatMessage { images: vec![], tool_calls: vec![], tool_call_id: None, role: "user".into(), content: "Hello".into() },
         ],
         temperature: Some(0.7),
         stream: false,
         think: None,
+        tools: vec![],
     };
     let decoded: ChatRequest = roundtrip(&req);
     assert_eq!(decoded.model, "llama3:latest");
@@ -54,10 +55,11 @@ fn chat_request_roundtrip() {
 fn chat_request_no_temperature_roundtrip() {
     let req = ChatRequest {
         model: "llama3:latest".into(),
-        messages: vec![ChatMessage { images: vec![], role: "user".into(), content: "Hi".into() }],
+        messages: vec![ChatMessage { images: vec![], tool_calls: vec![], tool_call_id: None, role: "user".into(), content: "Hi".into() }],
         temperature: None,
         stream: false,
         think: None,
+        tools: vec![],
     };
     let decoded: ChatRequest = roundtrip(&req);
     assert_eq!(decoded.temperature, None);
@@ -66,7 +68,7 @@ fn chat_request_no_temperature_roundtrip() {
 #[test]
 fn chat_response_roundtrip() {
     let resp = ChatResponse {
-        message: ChatMessage { images: vec![], role: "assistant".into(), content: "Hello!".into() },
+        message: ChatMessage { images: vec![], tool_calls: vec![], tool_call_id: None, role: "assistant".into(), content: "Hello!".into() },
     };
     let decoded: ChatResponse = roundtrip(&resp);
     assert_eq!(decoded.message.role, "assistant");
@@ -142,10 +144,11 @@ fn request_enum_embeddings_roundtrip() {
 fn request_enum_chat_roundtrip() {
     let req = Request::Chat(ChatRequest {
         model: "llama3:latest".into(),
-        messages: vec![ChatMessage { images: vec![], role: "user".into(), content: "Hi".into() }],
+        messages: vec![ChatMessage { images: vec![], tool_calls: vec![], tool_call_id: None, role: "user".into(), content: "Hi".into() }],
         temperature: None,
         stream: false,
         think: None,
+        tools: vec![],
     });
     let decoded: Request = roundtrip(&req);
     assert!(matches!(decoded, Request::Chat(_)));
@@ -183,7 +186,7 @@ fn response_embeddings_with_metering_roundtrip() {
 fn response_chat_with_metering_roundtrip() {
     let resp = Response::Chat {
         result: ChatResponse {
-            message: ChatMessage { images: vec![], role: "assistant".into(), content: "Hi!".into() },
+            message: ChatMessage { images: vec![], tool_calls: vec![], tool_call_id: None, role: "assistant".into(), content: "Hi!".into() },
         },
         metering: Metering {
             prompt_tokens: 20,
@@ -227,10 +230,11 @@ fn large_embedding_vector_roundtrip() {
 fn chat_request_stream_true_roundtrip() {
     let req = ChatRequest {
         model: "llama3:latest".into(),
-        messages: vec![ChatMessage { images: vec![], role: "user".into(), content: "Hi".into() }],
+        messages: vec![ChatMessage { images: vec![], tool_calls: vec![], tool_call_id: None, role: "user".into(), content: "Hi".into() }],
         temperature: None,
         stream: true,
         think: Some(false),
+        tools: vec![],
     };
     let decoded: ChatRequest = roundtrip(&req);
     assert!(decoded.stream);

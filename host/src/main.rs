@@ -139,6 +139,23 @@ async fn handle_chat(ollama: &Ollama, req: ChatRequest) -> anyhow::Result<Respon
     let think = req.think.unwrap_or(false);
     request = request.think(if think { ThinkType::True } else { ThinkType::False });
 
+    // Forward tool definitions to Ollama
+    if !req.tools.is_empty() {
+        let tool_infos: Vec<ollama_rs::generation::tools::ToolInfo> = req.tools.iter().filter_map(|t| {
+            let params: serde_json::Value = serde_json::from_str(&t.function.parameters).ok()?;
+            let schema: schemars::Schema = serde_json::from_value(params).ok()?;
+            Some(ollama_rs::generation::tools::ToolInfo {
+                tool_type: ollama_rs::generation::tools::ToolType::Function,
+                function: ollama_rs::generation::tools::ToolFunctionInfo {
+                    name: t.function.name.clone(),
+                    description: t.function.description.clone(),
+                    parameters: schema,
+                },
+            })
+        }).collect();
+        request = request.tools(tool_infos);
+    }
+
     let start = std::time::Instant::now();
     let res = ollama
         .send_chat_messages(request)
@@ -153,10 +170,24 @@ async fn handle_chat(ollama: &Ollama, req: ChatRequest) -> anyhow::Result<Respon
         _ => "assistant",
     };
 
+    // Convert tool calls from Ollama format to our format
+    let tool_calls: Vec<common::protocols::chat::ToolCall> = res.message.tool_calls.into_iter().enumerate().map(|(i, tc)| {
+        common::protocols::chat::ToolCall {
+            id: format!("call_{i}"),
+            call_type: "function".to_string(),
+            function: common::protocols::chat::ToolCallFunction {
+                name: tc.function.name,
+                arguments: tc.function.arguments.to_string(),
+            },
+        }
+    }).collect();
+
     let response_message = ChatMessage {
         role: role.to_string(),
         content: res.message.content,
         images: vec![],
+        tool_calls,
+        tool_call_id: None,
     };
 
     let (prompt_tokens, completion_tokens) = res
