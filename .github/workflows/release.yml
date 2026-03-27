@@ -2,14 +2,51 @@ name: Release
 
 on:
   push:
-    tags:
-      - "v*"
+    branches:
+      - master
+      - main
+    paths:
+      - "Cargo.toml"
 
 permissions:
   contents: write
 
 jobs:
+  detect-version:
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.version.outputs.changed }}
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Detect version change
+        id: version
+        run: |
+          # Get current version from workspace Cargo.toml
+          CURRENT=$(grep -A1 '\[workspace.package\]' Cargo.toml | grep 'version' | sed 's/.*"\(.*\)".*/\1/')
+
+          # Get previous version
+          git show HEAD~1:Cargo.toml > /tmp/old-cargo.toml 2>/dev/null || echo -e '[workspace.package]\nversion = "0.0.0"' > /tmp/old-cargo.toml
+          PREVIOUS=$(grep -A1 '\[workspace.package\]' /tmp/old-cargo.toml | grep 'version' | sed 's/.*"\(.*\)".*/\1/')
+
+          echo "current=$CURRENT"
+          echo "previous=$PREVIOUS"
+
+          if [ "$CURRENT" != "$PREVIOUS" ]; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "version=$CURRENT" >> $GITHUB_OUTPUT
+            echo "Version changed: $PREVIOUS → $CURRENT"
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "Version unchanged: $CURRENT"
+          fi
+
   build-host:
+    needs: detect-version
+    if: needs.detect-version.outputs.changed == 'true'
     strategy:
       matrix:
         include:
@@ -62,7 +99,6 @@ jobs:
         run: |
           mkdir -p dist
           cp target/${{ matrix.target }}/release/cocompute_host dist/${{ matrix.name }}
-          chmod +x dist/${{ matrix.name }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -71,10 +107,17 @@ jobs:
           path: dist/${{ matrix.name }}
 
   release:
-    needs: build-host
+    needs: [detect-version, build-host]
+    if: needs.detect-version.outputs.changed == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Create tag
+        run: |
+          TAG="v${{ needs.detect-version.outputs.version }}"
+          git tag "$TAG"
+          git push origin "$TAG"
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -85,5 +128,6 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: v${{ needs.detect-version.outputs.version }}
           files: dist/*
           generate_release_notes: true
