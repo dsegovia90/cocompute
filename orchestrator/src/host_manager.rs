@@ -120,4 +120,116 @@ mod tests {
         assert!(caps.models.iter().any(|m| m.name == "mxbai-embed-large:latest"));
         assert!(!caps.models.iter().any(|m| m.name == "gpt-4"));
     }
+
+    /// Create a real iroh connection pair for testing.
+    async fn make_test_connection() -> (iroh::protocol::Router, iroh::Endpoint, Connection) {
+        use common::protocols;
+
+        // Acceptor side: register our ALPN
+        let ep_accept = iroh::Endpoint::bind(iroh::endpoint::presets::N0).await.unwrap();
+        let addr = ep_accept.addr();
+
+        // Dummy protocol handler that just accepts connections
+        #[derive(Debug, Clone)]
+        struct DummyHandler;
+        impl iroh::protocol::ProtocolHandler for DummyHandler {
+            fn accept(
+                &self,
+                connection: iroh::endpoint::Connection,
+            ) -> impl Future<Output = Result<(), iroh::protocol::AcceptError>> + Send {
+                Box::pin(async move {
+                    connection.closed().await;
+                    Ok(())
+                })
+            }
+        }
+
+        let router = iroh::protocol::Router::builder(ep_accept)
+            .accept(protocols::ALPN, DummyHandler)
+            .spawn();
+
+        // Connector side
+        let ep_connect = iroh::Endpoint::bind(iroh::endpoint::presets::N0).await.unwrap();
+        let conn = ep_connect.connect(addr, protocols::ALPN).await.unwrap();
+
+        (router, ep_connect, conn)
+    }
+
+    #[tokio::test]
+    async fn two_hosts_same_model_one_disconnects() {
+        let mgr = HostManager::new();
+
+        let (_ep1a, _ep1b, conn1) = make_test_connection().await;
+        let (_ep2a, _ep2b, conn2) = make_test_connection().await;
+
+        // Both hosts have llama3
+        mgr.register(
+            "host-1".into(),
+            test_capabilities(vec!["llama3:latest", "mxbai-embed-large:latest"]),
+            conn1,
+        ).await;
+        mgr.register(
+            "host-2".into(),
+            test_capabilities(vec!["llama3:latest"]),
+            conn2,
+        ).await;
+
+        // Both models available
+        let mut models = mgr.available_models().await;
+        models.sort();
+        models.dedup();
+        assert_eq!(models, vec!["llama3:latest", "mxbai-embed-large:latest"]);
+
+        // Both hosts can serve llama3
+        assert!(mgr.find_host_for_model("llama3:latest").await.is_some());
+
+        // Host 2 disconnects
+        mgr.unregister("host-2").await;
+
+        // llama3 still available via host-1
+        let host = mgr.find_host_for_model("llama3:latest").await;
+        assert!(host.is_some());
+        assert_eq!(host.unwrap().endpoint_id, "host-1");
+
+        // mxbai still available (only host-1 had it)
+        assert!(mgr.find_host_for_model("mxbai-embed-large:latest").await.is_some());
+    }
+
+    #[tokio::test]
+    async fn all_hosts_disconnect_model_unavailable() {
+        let mgr = HostManager::new();
+
+        let (_ep1a, _ep1b, conn1) = make_test_connection().await;
+
+        mgr.register(
+            "host-1".into(),
+            test_capabilities(vec!["llama3:latest"]),
+            conn1,
+        ).await;
+
+        assert!(mgr.find_host_for_model("llama3:latest").await.is_some());
+
+        mgr.unregister("host-1").await;
+
+        // Model gone
+        assert!(mgr.find_host_for_model("llama3:latest").await.is_none());
+        assert!(mgr.available_models().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn round_robin_across_two_hosts() {
+        let mgr = HostManager::new();
+
+        let (_ep1a, _ep1b, conn1) = make_test_connection().await;
+        let (_ep2a, _ep2b, conn2) = make_test_connection().await;
+
+        mgr.register("host-1".into(), test_capabilities(vec!["llama3:latest"]), conn1).await;
+        mgr.register("host-2".into(), test_capabilities(vec!["llama3:latest"]), conn2).await;
+
+        let h1 = mgr.find_host_for_model("llama3:latest").await.unwrap();
+        let h2 = mgr.find_host_for_model("llama3:latest").await.unwrap();
+
+        // Should get different hosts (round-robin)
+        assert_ne!(h1.endpoint_id, h2.endpoint_id);
+    }
 }
