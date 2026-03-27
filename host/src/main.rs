@@ -306,9 +306,9 @@ async fn discover_capabilities(ollama: &Ollama) -> anyhow::Result<Capabilities> 
         })
         .collect();
 
-    tracing::info!("discovered {} models from Ollama", model_infos.len());
+    tracing::debug!("discovered {} models from Ollama", model_infos.len());
     for m in &model_infos {
-        tracing::info!("  - {}", m.name);
+        tracing::debug!("  - {}", m.name);
     }
 
     Ok(Capabilities { models: model_infos })
@@ -365,7 +365,7 @@ async fn connect_and_serve(
     let mut last_models = initial_models;
 
     let heartbeat_handle = tokio::spawn(async move {
-        let mut interval = tokio::time::interval(std::time::Duration::from_secs(30));
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(15));
         loop {
             interval.tick().await;
 
@@ -381,30 +381,30 @@ async fn connect_and_serve(
             let mut new_models: Vec<String> = new_caps.models.iter().map(|m| m.name.clone()).collect();
             new_models.sort();
 
-            if new_models == last_models {
-                continue; // No change, skip the network call
-            }
-
-            tracing::info!("model list changed, re-registering with orchestrator");
-            last_models = new_models;
-
-            let req = Request::Registry(RegistryRequest::Register(new_caps));
+            let req = if new_models != last_models {
+                tracing::info!("model list changed, re-registering with orchestrator");
+                last_models = new_models;
+                Request::Registry(RegistryRequest::Register(new_caps))
+            } else {
+                // Send heartbeat to keep the QUIC connection alive
+                Request::Registry(RegistryRequest::Heartbeat)
+            };
             match heartbeat_conn.open_bi().await {
                 Ok((send, recv)) => {
                     if let Err(e) = write_p2p(send, req).await {
-                        tracing::warn!("re-registration send failed: {e}");
+                        tracing::warn!("heartbeat/registration send failed: {e}");
                         break;
                     }
                     match read_p2p::<Response>(recv).await {
-                        Ok(_) => tracing::info!("re-registration ack"),
+                        Ok(_) => tracing::debug!("heartbeat ack"),
                         Err(e) => {
-                            tracing::warn!("re-registration recv failed: {e}");
+                            tracing::warn!("heartbeat/registration recv failed: {e}");
                             break;
                         }
                     }
                 }
                 Err(e) => {
-                    tracing::warn!("re-registration open_bi failed: {e}");
+                    tracing::warn!("heartbeat open_bi failed: {e}");
                     break;
                 }
             }

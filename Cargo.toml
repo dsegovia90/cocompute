@@ -3,7 +3,7 @@ resolver = "3"
 members = ["common", "host", "orchestrator"]
 
 [workspace.package]
-version = "0.3.3"
+version = "0.3.4"
 
 [workspace.dependencies]
 anyhow = "1.0"
