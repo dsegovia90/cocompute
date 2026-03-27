@@ -17,6 +17,7 @@ RUN mkdir -p common/src host/src orchestrator/src && \
 
 # Build dependencies only (cached layer)
 RUN cargo build --release -p cocompute_orchestrator 2>/dev/null || true
+RUN cargo build --release -p cocompute_host 2>/dev/null || true
 
 # Remove dummy source, copy real source
 RUN rm -rf common/src host/src orchestrator/src
@@ -24,8 +25,20 @@ COPY common/ common/
 COPY host/ host/
 COPY orchestrator/ orchestrator/
 
-# Build the real binary
+# Build both binaries
 RUN cargo build --release -p cocompute_orchestrator
+RUN cargo build --release -p cocompute_host
+
+# Detect architecture and name the host binary accordingly
+RUN mkdir -p /opt/binaries && \
+    ARCH=$(uname -m) && \
+    case "$ARCH" in \
+        x86_64)  PLATFORM="linux-x86_64" ;; \
+        aarch64) PLATFORM="linux-arm64" ;; \
+        *)       PLATFORM="linux-$ARCH" ;; \
+    esac && \
+    cp target/release/cocompute_host /opt/binaries/cocompute-host-$PLATFORM && \
+    echo "Built host binary for $PLATFORM"
 
 # Runtime stage
 FROM debian:bookworm-slim
@@ -33,6 +46,7 @@ FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/target/release/cocompute_orchestrator /usr/local/bin/cocompute-orchestrator
+COPY --from=builder /opt/binaries/ /opt/binaries/
 
 # Data directory for SQLite and keys
 RUN mkdir -p /data /root/.cocompute

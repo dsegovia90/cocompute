@@ -127,8 +127,10 @@ async fn main() -> anyhow::Result<()> {
                 .route("/v1/chat/completions", post(create_chat_completion))
                 .route("/v1/stats", get(get_stats))
                 .route_layer(middleware::from_fn_with_state(db, auth::require_api_key))
-                // Unauthenticated routes (host discovery)
+                // Unauthenticated routes (host discovery + updates)
                 .route("/v1/node-info", get(get_node_info))
+                .route("/v1/version", get(get_version))
+                .route("/v1/update/:platform", get(get_update))
                 .layer(tower_http::trace::TraceLayer::new_for_http())
                 .with_state(state);
 
@@ -249,6 +251,41 @@ async fn get_node_info(
         "endpoint_id": state.endpoint_id,
         "version": env!("CARGO_PKG_VERSION"),
     }))
+}
+
+/// GET /v1/version — Returns the orchestrator version for update checks.
+async fn get_version() -> Json<serde_json::Value> {
+    Json(serde_json::json!({
+        "version": env!("CARGO_PKG_VERSION"),
+    }))
+}
+
+/// GET /v1/update/:platform — Serves host binary for the given platform.
+/// Platforms: linux-x86_64, linux-arm64, macos-arm64, macos-x86_64
+async fn get_update(
+    axum::extract::Path(platform): axum::extract::Path<String>,
+) -> Result<axum::response::Response, AppError> {
+    let binary_path = format!("/opt/binaries/cocompute-host-{platform}");
+    let path = std::path::Path::new(&binary_path);
+
+    if !path.exists() {
+        return Err(AppError::Internal(anyhow::anyhow!(
+            "binary not found for platform: {platform}. Available: linux-x86_64, linux-arm64, macos-arm64, macos-x86_64"
+        )));
+    }
+
+    let bytes = tokio::fs::read(path)
+        .await
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("failed to read binary: {e}")))?;
+
+    Ok(axum::response::Response::builder()
+        .header("content-type", "application/octet-stream")
+        .header(
+            "content-disposition",
+            format!("attachment; filename=\"cocompute-host-{platform}\""),
+        )
+        .body(axum::body::Body::from(bytes))
+        .unwrap())
 }
 
 /// POST /v1/embeddings — OpenAI-compatible embeddings endpoint.

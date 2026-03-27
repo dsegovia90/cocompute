@@ -2,6 +2,9 @@
 resolver = "3"
 members = ["common", "host", "orchestrator"]
 
+[workspace.package]
+version = "0.2.0"
+
 [workspace.dependencies]
 anyhow = "1.0"
 iroh = "0.97.0"
