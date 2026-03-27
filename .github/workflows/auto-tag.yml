@@ -22,7 +22,7 @@ jobs:
       - name: Detect version change
         id: version
         run: |
-          # Get current version from host Cargo.toml (host and orchestrator should match)
+          # Get current version from workspace Cargo.toml
           CURRENT=$(grep -A1 '\[workspace.package\]' Cargo.toml | grep 'version' | sed 's/.*"\(.*\)".*/\1/')
 
           # Get previous version
