@@ -129,6 +129,7 @@ async fn main() -> anyhow::Result<()> {
                 .route_layer(middleware::from_fn_with_state(db, auth::require_api_key))
                 // Unauthenticated routes (host discovery)
                 .route("/v1/node-info", get(get_node_info))
+                .layer(tower_http::trace::TraceLayer::new_for_http())
                 .with_state(state);
 
             let addr = format!("0.0.0.0:{}", args.port);
