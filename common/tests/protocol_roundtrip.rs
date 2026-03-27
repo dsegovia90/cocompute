@@ -1,7 +1,7 @@
 use bitcode::{Decode, Encode};
 use common::protocols::{
     ChatStreamFrame, Metering, Request, Response,
-    chat::{ChatMessage, ChatRequest, ChatResponse},
+    chat::{ChatMessage, ChatRequest, ChatResponse, ToolCall, ToolCallFunction, ToolDefinition, ToolFunctionDef},
     embeddings::{EmbeddingsRequest, EmbeddingsResponse},
     registry::{Capabilities, ModelInfo, RegistryRequest},
 };
@@ -284,4 +284,86 @@ fn chat_stream_frame_empty_delta_roundtrip() {
         ChatStreamFrame::Delta(content) => assert!(content.is_empty()),
         _ => panic!("expected Delta"),
     }
+}
+
+#[test]
+fn chat_message_with_tool_calls_roundtrip() {
+    let msg = ChatMessage {
+        role: "assistant".into(),
+        content: String::new(),
+        images: vec![],
+        tool_calls: vec![
+            ToolCall {
+                id: "call_0".into(),
+                call_type: "function".into(),
+                function: ToolCallFunction {
+                    name: "get_weather".into(),
+                    arguments: r#"{"location":"San Francisco"}"#.into(),
+                },
+            },
+        ],
+        tool_call_id: None,
+    };
+    let decoded: ChatMessage = roundtrip(&msg);
+    assert_eq!(decoded.tool_calls.len(), 1);
+    assert_eq!(decoded.tool_calls[0].id, "call_0");
+    assert_eq!(decoded.tool_calls[0].function.name, "get_weather");
+    assert_eq!(decoded.tool_calls[0].function.arguments, r#"{"location":"San Francisco"}"#);
+}
+
+#[test]
+fn chat_message_tool_response_roundtrip() {
+    let msg = ChatMessage {
+        role: "tool".into(),
+        content: r#"{"temp": 65, "unit": "F"}"#.into(),
+        images: vec![],
+        tool_calls: vec![],
+        tool_call_id: Some("call_0".into()),
+    };
+    let decoded: ChatMessage = roundtrip(&msg);
+    assert_eq!(decoded.role, "tool");
+    assert_eq!(decoded.tool_call_id, Some("call_0".into()));
+}
+
+#[test]
+fn chat_request_with_tools_roundtrip() {
+    let req = ChatRequest {
+        model: "llama3:latest".into(),
+        messages: vec![ChatMessage {
+            role: "user".into(),
+            content: "What's the weather?".into(),
+            images: vec![],
+            tool_calls: vec![],
+            tool_call_id: None,
+        }],
+        temperature: None,
+        stream: false,
+        think: None,
+        tools: vec![ToolDefinition {
+            tool_type: "function".into(),
+            function: ToolFunctionDef {
+                name: "get_weather".into(),
+                description: "Get the weather for a location".into(),
+                parameters: r#"{"type":"object","properties":{"location":{"type":"string"}}}"#.into(),
+            },
+        }],
+    };
+    let decoded: ChatRequest = roundtrip(&req);
+    assert_eq!(decoded.tools.len(), 1);
+    assert_eq!(decoded.tools[0].function.name, "get_weather");
+    assert_eq!(decoded.tools[0].function.description, "Get the weather for a location");
+}
+
+#[test]
+fn chat_message_no_tools_roundtrip() {
+    let msg = ChatMessage {
+        role: "user".into(),
+        content: "Hello".into(),
+        images: vec![],
+        tool_calls: vec![],
+        tool_call_id: None,
+    };
+    let decoded: ChatMessage = roundtrip(&msg);
+    assert!(decoded.tool_calls.is_empty());
+    assert!(decoded.tool_call_id.is_none());
 }
