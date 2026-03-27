@@ -22,23 +22,23 @@ use ollama_rs::{
 #[command(name = "cocompute-host", version)]
 struct Args {
     /// Ollama server URL
-    #[arg(long, default_value = "http://localhost", env = "OLLAMA_URL", global = true)]
+    #[arg(long, default_value = "http://localhost", env = "OLLAMA_URL")]
     ollama_url: String,
 
     /// Ollama server port
-    #[arg(long, default_value = "11434", env = "OLLAMA_PORT", global = true)]
+    #[arg(long, default_value = "11434", env = "OLLAMA_PORT")]
     ollama_port: u16,
 
     /// Orchestrator HTTP URL for discovery (e.g. http://192.168.1.100:3000)
-    #[arg(long, env = "COCOMPUTE_ORCHESTRATOR_URL", global = true)]
+    #[arg(long, env = "COCOMPUTE_ORCHESTRATOR_URL")]
     orchestrator_url: String,
 
     /// Orchestrator endpoint ID (optional — fetched from orchestrator if not provided)
-    #[arg(long, env = "COCOMPUTE_ORCHESTRATOR_ID", global = true)]
+    #[arg(long, env = "COCOMPUTE_ORCHESTRATOR_ID")]
     orchestrator_id: Option<String>,
 
     /// Path to persist the iroh secret key for stable EndpointId
-    #[arg(long, default_value = "~/.cocompute/host.key", env = "COCOMPUTE_KEY_PATH", global = true)]
+    #[arg(long, default_value = "~/.cocompute/host.key", env = "COCOMPUTE_KEY_PATH")]
     key_path: String,
 
     /// Automatically check for updates on startup
@@ -540,14 +540,16 @@ async fn main() -> anyhow::Result<()> {
 
     let args = Args::parse();
 
+    let orchestrator_url = args.orchestrator_url.clone();
+
     // Handle self-update subcommand
     if matches!(args.command, Some(Command::SelfUpdate)) {
-        tracing::info!("checking for updates from {}", args.orchestrator_url);
-        match check_for_update(&args.orchestrator_url).await? {
+        tracing::info!("checking for updates from {}", orchestrator_url);
+        match check_for_update(&orchestrator_url).await? {
             Some(new_version) => {
                 let local = env!("CARGO_PKG_VERSION");
                 tracing::info!("update available: {local} → {new_version}");
-                perform_update(&args.orchestrator_url).await?;
+                perform_update(&orchestrator_url).await?;
             }
             None => {
                 tracing::info!("already on latest version ({})", env!("CARGO_PKG_VERSION"));
@@ -559,11 +561,11 @@ async fn main() -> anyhow::Result<()> {
     // Auto-update check on startup
     if args.auto_update {
         tracing::info!("checking for updates...");
-        match check_for_update(&args.orchestrator_url).await {
+        match check_for_update(&orchestrator_url).await {
             Ok(Some(new_version)) => {
                 let local = env!("CARGO_PKG_VERSION");
                 tracing::info!("update available: {local} → {new_version}. updating...");
-                match perform_update(&args.orchestrator_url).await {
+                match perform_update(&orchestrator_url).await {
                     Ok(()) => {
                         tracing::info!("update installed. restarting...");
                         // Re-exec ourselves with the same args
@@ -605,8 +607,8 @@ async fn main() -> anyhow::Result<()> {
         let orchestrator_id = match &cached_id {
             Some(id) => id.clone(),
             None => {
-                tracing::info!("fetching orchestrator endpoint ID from {}", args.orchestrator_url);
-                match fetch_orchestrator_id(&args.orchestrator_url).await {
+                tracing::info!("fetching orchestrator endpoint ID from {}", orchestrator_url);
+                match fetch_orchestrator_id(&orchestrator_url).await {
                     Ok(id) => {
                         tracing::info!("orchestrator endpoint ID: {id}");
                         cached_id = Some(id.clone());

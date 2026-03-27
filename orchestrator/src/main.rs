@@ -29,15 +29,15 @@ mod openai;
 #[command(name = "cocompute-orchestrator", version)]
 struct Args {
     /// Port to listen on
-    #[arg(long, default_value = "3000", env = "COCOMPUTE_PORT", global = true)]
+    #[arg(long, default_value = "3000", env = "COCOMPUTE_PORT")]
     port: u16,
 
     /// SQLite database path
-    #[arg(long, default_value = "./cocompute.db", env = "COCOMPUTE_DB_PATH", global = true)]
+    #[arg(long, default_value = "./cocompute.db", env = "COCOMPUTE_DB_PATH")]
     db_path: String,
 
     /// Path to persist the iroh secret key for stable EndpointId
-    #[arg(long, default_value = "~/.cocompute/orchestrator.key", env = "COCOMPUTE_KEY_PATH", global = true)]
+    #[arg(long, default_value = "~/.cocompute/orchestrator.key", env = "COCOMPUTE_KEY_PATH")]
     key_path: String,
 
     #[command(subcommand)]
