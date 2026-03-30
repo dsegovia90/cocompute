@@ -256,6 +256,37 @@ async fn handle_chat_stream(
     let think = req.think.unwrap_or(false);
     request = request.think(if think { ThinkType::True } else { ThinkType::False });
 
+    // Forward tool definitions to Ollama
+    if !req.tools.is_empty() {
+        tracing::info!("forwarding {} tool definitions to Ollama (streaming)", req.tools.len());
+        let tool_infos: Vec<ollama_rs::generation::tools::ToolInfo> = req.tools.iter().filter_map(|t| {
+            let params: serde_json::Value = match serde_json::from_str(&t.function.parameters) {
+                Ok(v) => v,
+                Err(e) => {
+                    tracing::warn!("tool '{}' has invalid parameters JSON: {e}", t.function.name);
+                    return None;
+                }
+            };
+            let schema: schemars::Schema = match serde_json::from_value(params) {
+                Ok(s) => s,
+                Err(e) => {
+                    tracing::warn!("tool '{}' has invalid JSON Schema: {e}", t.function.name);
+                    return None;
+                }
+            };
+            Some(ollama_rs::generation::tools::ToolInfo {
+                tool_type: ollama_rs::generation::tools::ToolType::Function,
+                function: ollama_rs::generation::tools::ToolFunctionInfo {
+                    name: t.function.name.clone(),
+                    description: t.function.description.clone(),
+                    parameters: schema,
+                },
+            })
+        }).collect();
+        tracing::info!("{} tools successfully parsed (streaming)", tool_infos.len());
+        request = request.tools(tool_infos);
+    }
+
     // Signal that we're starting a stream
     write_frame(send, Response::ChatStreamStart).await?;
 

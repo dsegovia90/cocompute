@@ -631,7 +631,7 @@ dependencies = [
 
 [[package]]
 name = "cocompute_host"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "anyhow",
  "clap",
@@ -653,7 +653,7 @@ dependencies = [
 
 [[package]]
 name = "cocompute_orchestrator"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -696,7 +696,7 @@ dependencies = [
 
 [[package]]
 name = "common"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "anyhow",
  "bitcode",
