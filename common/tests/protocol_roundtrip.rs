@@ -277,6 +277,30 @@ fn chat_stream_frame_done_roundtrip() {
 }
 
 #[test]
+fn chat_stream_frame_tool_calls_roundtrip() {
+    let frame = ChatStreamFrame::ToolCalls(vec![
+        ToolCall {
+            id: "call_0".into(),
+            call_type: "function".into(),
+            function: ToolCallFunction {
+                name: "bash".into(),
+                arguments: r#"{"command":"ls"}"#.into(),
+            },
+        },
+    ]);
+    let decoded: ChatStreamFrame = roundtrip(&frame);
+    match decoded {
+        ChatStreamFrame::ToolCalls(calls) => {
+            assert_eq!(calls.len(), 1);
+            assert_eq!(calls[0].id, "call_0");
+            assert_eq!(calls[0].function.name, "bash");
+            assert_eq!(calls[0].function.arguments, r#"{"command":"ls"}"#);
+        }
+        _ => panic!("expected ToolCalls"),
+    }
+}
+
+#[test]
 fn chat_stream_frame_empty_delta_roundtrip() {
     let frame = ChatStreamFrame::Delta(String::new());
     let decoded: ChatStreamFrame = roundtrip(&frame);

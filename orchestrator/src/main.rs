@@ -467,6 +467,8 @@ async fn create_chat_completion_stream(
 
     // Build SSE stream that reads frames from iroh
     let stream = async_stream::stream! {
+        let mut has_tool_calls = false;
+
         // First chunk: role
         yield Ok::<_, std::convert::Infallible>(Event::default().data(serde_json::to_string(&OpenAIChatStreamChunk {
             id: chat_id.clone(),
@@ -478,6 +480,7 @@ async fn create_chat_completion_stream(
                 delta: OpenAIChatStreamDelta {
                     role: Some("assistant".to_string()),
                     content: None,
+                    tool_calls: None,
                 },
                 finish_reason: None,
             }],
@@ -497,6 +500,7 @@ async fn create_chat_completion_stream(
                             delta: OpenAIChatStreamDelta {
                                 role: None,
                                 content: Some(content),
+                                tool_calls: None,
                             },
                             finish_reason: None,
                         }],
@@ -514,10 +518,42 @@ async fn create_chat_completion_stream(
                             delta: OpenAIChatStreamDelta {
                                 role: None,
                                 content: Some(thinking),
+                                tool_calls: None,
                             },
                             finish_reason: None,
                         }],
                     }).unwrap()));
+                }
+                Ok(Some(ChatStreamFrame::ToolCalls(tool_calls))) => {
+                    let tc_json: Vec<serde_json::Value> = tool_calls.iter().enumerate().map(|(i, tc)| {
+                        serde_json::json!({
+                            "index": i,
+                            "id": tc.id,
+                            "type": tc.call_type,
+                            "function": {
+                                "name": tc.function.name,
+                                "arguments": tc.function.arguments,
+                            }
+                        })
+                    }).collect();
+
+                    yield Ok(Event::default().data(serde_json::to_string(&OpenAIChatStreamChunk {
+                        id: chat_id.clone(),
+                        object: "chat.completion.chunk",
+                        created,
+                        model: model.clone(),
+                        choices: vec![OpenAIChatStreamChoice {
+                            index: 0,
+                            delta: OpenAIChatStreamDelta {
+                                role: None,
+                                content: None,
+                                tool_calls: Some(tc_json),
+                            },
+                            finish_reason: None,
+                        }],
+                    }).unwrap()));
+
+                    has_tool_calls = true;
                 }
                 Ok(Some(ChatStreamFrame::Done(metering))) => {
                     log_metering(db.clone(), host_id.clone(), model_clone.clone(), "chat_stream".into(), &metering, Some(api_key_id));
@@ -533,8 +569,9 @@ async fn create_chat_completion_stream(
                             delta: OpenAIChatStreamDelta {
                                 role: None,
                                 content: None,
+                                tool_calls: None,
                             },
-                            finish_reason: Some("stop"),
+                            finish_reason: Some(if has_tool_calls { "tool_calls" } else { "stop" }),
                         }],
                     }).unwrap()));
 

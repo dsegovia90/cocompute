@@ -210,6 +210,8 @@ pub struct OpenAIChatStreamDelta {
     pub role: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub content: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_calls: Option<Vec<serde_json::Value>>,
 }
 
 // ── Shared ──────────────────────────────────────────────────
@@ -298,6 +300,7 @@ mod tests {
                 delta: OpenAIChatStreamDelta {
                     role: None,
                     content: Some("Hello".into()),
+                    tool_calls: None,
                 },
                 finish_reason: None,
             }],
@@ -319,7 +322,7 @@ mod tests {
             model: "llama3:latest".into(),
             choices: vec![OpenAIChatStreamChoice {
                 index: 0,
-                delta: OpenAIChatStreamDelta { role: None, content: None },
+                delta: OpenAIChatStreamDelta { role: None, content: None, tool_calls: None },
                 finish_reason: Some("stop"),
             }],
         };
@@ -342,5 +345,33 @@ mod tests {
         let json = r#"{"model":"llama3:latest","messages":[{"role":"user","content":"Hi"}]}"#;
         let req: OpenAIChatRequest = serde_json::from_str(json).unwrap();
         assert!(!req.stream);
+    }
+
+    #[test]
+    fn chat_stream_chunk_with_tool_calls_json_format() {
+        let chunk = OpenAIChatStreamChunk {
+            id: "chatcmpl-123".into(),
+            object: "chat.completion.chunk",
+            created: 1234567890,
+            model: "llama3:latest".into(),
+            choices: vec![OpenAIChatStreamChoice {
+                index: 0,
+                delta: OpenAIChatStreamDelta {
+                    role: None,
+                    content: None,
+                    tool_calls: Some(vec![serde_json::json!({
+                        "index": 0,
+                        "id": "call_0",
+                        "type": "function",
+                        "function": { "name": "bash", "arguments": r#"{"command":"ls"}"# }
+                    })]),
+                },
+                finish_reason: None,
+            }],
+        };
+        let json: serde_json::Value = serde_json::to_value(&chunk).unwrap();
+        assert_eq!(json["choices"][0]["delta"]["tool_calls"][0]["function"]["name"], "bash");
+        // content should be absent (skip_serializing_if)
+        assert!(json["choices"][0]["delta"].get("content").is_none());
     }
 }

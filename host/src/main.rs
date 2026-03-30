@@ -57,6 +57,16 @@ enum Command {
     Run,
 }
 
+/// Strip the `@dev` suffix from model names in debug builds.
+/// In release builds, this is a no-op (the suffix is never added).
+fn ollama_model_name(model: &str) -> String {
+    if cfg!(debug_assertions) {
+        model.strip_suffix("@dev").unwrap_or(model).to_string()
+    } else {
+        model.to_string()
+    }
+}
+
 /// Handle a single inference stream from the orchestrator.
 async fn handle_inference_stream(
     ollama: Ollama,
@@ -92,7 +102,7 @@ async fn handle_inference_stream(
 }
 
 async fn handle_embeddings(ollama: &Ollama, req: EmbeddingsRequest) -> anyhow::Result<Response> {
-    let request = GenerateEmbeddingsRequest::new(req.model.clone(), req.text.into());
+    let request = GenerateEmbeddingsRequest::new(ollama_model_name(&req.model), req.text.into());
 
     let start = std::time::Instant::now();
     let res = ollama
@@ -135,7 +145,7 @@ async fn handle_chat(ollama: &Ollama, req: ChatRequest) -> anyhow::Result<Respon
         })
         .collect();
 
-    let mut request = ChatMessageRequest::new(req.model.clone(), messages);
+    let mut request = ChatMessageRequest::new(ollama_model_name(&req.model), messages);
     let think = req.think.unwrap_or(false);
     request = request.think(if think { ThinkType::True } else { ThinkType::False });
 
@@ -252,7 +262,7 @@ async fn handle_chat_stream(
         })
         .collect();
 
-    let mut request = ChatMessageRequest::new(req.model.clone(), messages);
+    let mut request = ChatMessageRequest::new(ollama_model_name(&req.model), messages);
     let think = req.think.unwrap_or(false);
     request = request.think(if think { ThinkType::True } else { ThinkType::False });
 
@@ -290,64 +300,114 @@ async fn handle_chat_stream(
     // Signal that we're starting a stream
     write_frame(send, Response::ChatStreamStart).await?;
 
-    let start = std::time::Instant::now();
-    let mut stream = ollama
-        .send_chat_messages_stream(request)
-        .await
-        .map_err(|e| anyhow::anyhow!("ollama stream error: {e}"))?;
+    let has_tools = !req.tools.is_empty();
 
-    let mut prompt_tokens: u32 = 0;
-    let mut completion_tokens: u32 = 0;
+    // Ollama does not support tool calls in streaming mode — tools are silently ignored.
+    // When tools are present, use the non-streaming API and emit the result as stream frames.
+    if has_tools {
+        tracing::info!("tools present, using non-streaming Ollama API for tool call support");
+        let start = std::time::Instant::now();
+        let res = ollama
+            .send_chat_messages(request)
+            .await
+            .map_err(|e| anyhow::anyhow!("ollama chat error: {e}"))?;
+        let compute_ms = start.elapsed().as_millis() as u64;
 
-    let mut chunk_count = 0u32;
-    while let Some(chunk) = stream.next().await {
-        match chunk {
-            Ok(resp) => {
-                // Forward content (actual response tokens)
-                let content = resp.message.content.clone();
-                if !content.is_empty() {
-                    chunk_count += 1;
-                    tracing::debug!("streaming chunk #{chunk_count}: {:?}", &content);
-                    write_frame(send, ChatStreamFrame::Delta(content)).await?;
+        // Emit content as a single delta if present
+        if !res.message.content.is_empty() {
+            write_frame(send, ChatStreamFrame::Delta(res.message.content.clone())).await?;
+        }
+
+        // Emit tool calls if present
+        if !res.message.tool_calls.is_empty() {
+            tracing::info!("response contains {} tool calls", res.message.tool_calls.len());
+            let tool_calls: Vec<common::protocols::chat::ToolCall> = res.message.tool_calls.into_iter().enumerate().map(|(i, tc)| {
+                common::protocols::chat::ToolCall {
+                    id: format!("call_{i}"),
+                    call_type: "function".to_string(),
+                    function: common::protocols::chat::ToolCallFunction {
+                        name: tc.function.name,
+                        arguments: tc.function.arguments.to_string(),
+                    },
                 }
+            }).collect();
+            write_frame(send, ChatStreamFrame::ToolCalls(tool_calls)).await?;
+        }
 
-                // Forward thinking content if present (reasoning models)
-                if let Some(ref thinking) = resp.message.thinking {
-                    if !thinking.is_empty() {
+        let (prompt_tokens, completion_tokens) = res
+            .final_data
+            .map(|d| (d.prompt_eval_count as u32, d.eval_count as u32))
+            .unwrap_or((0, 0));
+
+        write_frame(
+            send,
+            ChatStreamFrame::Done(Metering {
+                prompt_tokens,
+                completion_tokens,
+                compute_ms,
+            }),
+        )
+        .await?;
+    } else {
+        let start = std::time::Instant::now();
+        let mut stream = ollama
+            .send_chat_messages_stream(request)
+            .await
+            .map_err(|e| anyhow::anyhow!("ollama stream error: {e}"))?;
+
+        let mut prompt_tokens: u32 = 0;
+        let mut completion_tokens: u32 = 0;
+
+        let mut chunk_count = 0u32;
+        while let Some(chunk) = stream.next().await {
+            match chunk {
+                Ok(resp) => {
+                    // Forward content (actual response tokens)
+                    let content = resp.message.content.clone();
+                    if !content.is_empty() {
                         chunk_count += 1;
-                        tracing::debug!("streaming thinking chunk #{chunk_count}");
-                        write_frame(send, ChatStreamFrame::Thinking(thinking.clone())).await?;
+                        tracing::debug!("streaming chunk #{chunk_count}: {:?}", &content);
+                        write_frame(send, ChatStreamFrame::Delta(content)).await?;
                     }
-                }
 
-                if resp.done {
-                    tracing::debug!("ollama stream done after {chunk_count} chunks");
-                    if let Some(final_data) = resp.final_data {
-                        prompt_tokens = final_data.prompt_eval_count as u32;
-                        completion_tokens = final_data.eval_count as u32;
+                    // Forward thinking content if present (reasoning models)
+                    if let Some(ref thinking) = resp.message.thinking {
+                        if !thinking.is_empty() {
+                            chunk_count += 1;
+                            tracing::debug!("streaming thinking chunk #{chunk_count}");
+                            write_frame(send, ChatStreamFrame::Thinking(thinking.clone())).await?;
+                        }
+                    }
+
+                    if resp.done {
+                        tracing::debug!("ollama stream done after {chunk_count} chunks");
+                        if let Some(final_data) = resp.final_data {
+                            prompt_tokens = final_data.prompt_eval_count as u32;
+                            completion_tokens = final_data.eval_count as u32;
+                        }
                     }
                 }
-            }
-            Err(_) => {
-                tracing::warn!("ollama stream chunk error");
-                break;
+                Err(_) => {
+                    tracing::warn!("ollama stream chunk error");
+                    break;
+                }
             }
         }
+        tracing::debug!("ollama stream ended, sent {chunk_count} chunks");
+
+        let compute_ms = start.elapsed().as_millis() as u64;
+
+        // Send final frame with metering
+        write_frame(
+            send,
+            ChatStreamFrame::Done(Metering {
+                prompt_tokens,
+                completion_tokens,
+                compute_ms,
+            }),
+        )
+        .await?;
     }
-    tracing::debug!("ollama stream ended, sent {chunk_count} chunks");
-
-    let compute_ms = start.elapsed().as_millis() as u64;
-
-    // Send final frame with metering
-    write_frame(
-        send,
-        ChatStreamFrame::Done(Metering {
-            prompt_tokens,
-            completion_tokens,
-            compute_ms,
-        }),
-    )
-    .await?;
 
     Ok(())
 }
@@ -374,11 +434,18 @@ async fn discover_capabilities(ollama: &Ollama) -> anyhow::Result<Capabilities> 
 
     let model_infos: Vec<ModelInfo> = models
         .into_iter()
-        .map(|m| ModelInfo {
-            name: m.name,
-            quantization: String::new(), // Ollama LocalModel doesn't expose quantization
-            vram_mb: 0, // Ollama doesn't expose this per-model
-            ram_mb: 0,
+        .map(|m| {
+            let name = if cfg!(debug_assertions) {
+                format!("{}@dev", m.name)
+            } else {
+                m.name
+            };
+            ModelInfo {
+                name,
+                quantization: String::new(), // Ollama LocalModel doesn't expose quantization
+                vram_mb: 0, // Ollama doesn't expose this per-model
+                ram_mb: 0,
+            }
         })
         .collect();
 
@@ -759,4 +826,19 @@ async fn main() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ollama_model_name_strips_dev_suffix() {
+        assert_eq!(ollama_model_name("llama3:latest@dev"), "llama3:latest");
+    }
+
+    #[test]
+    fn ollama_model_name_passthrough_without_suffix() {
+        assert_eq!(ollama_model_name("llama3:latest"), "llama3:latest");
+    }
 }

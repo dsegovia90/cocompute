@@ -49,6 +49,8 @@ pub enum ChatStreamFrame {
     Delta(String),
     /// A thinking/reasoning chunk (for thinking models).
     Thinking(String),
+    /// Tool calls returned by the model (sent before Done).
+    ToolCalls(Vec<chat::ToolCall>),
     /// Final frame with metering. No more frames after this.
     Done(Metering),
 }
