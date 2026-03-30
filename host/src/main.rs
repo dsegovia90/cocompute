@@ -141,9 +141,22 @@ async fn handle_chat(ollama: &Ollama, req: ChatRequest) -> anyhow::Result<Respon
 
     // Forward tool definitions to Ollama
     if !req.tools.is_empty() {
+        tracing::info!("forwarding {} tool definitions to Ollama", req.tools.len());
         let tool_infos: Vec<ollama_rs::generation::tools::ToolInfo> = req.tools.iter().filter_map(|t| {
-            let params: serde_json::Value = serde_json::from_str(&t.function.parameters).ok()?;
-            let schema: schemars::Schema = serde_json::from_value(params).ok()?;
+            let params: serde_json::Value = match serde_json::from_str(&t.function.parameters) {
+                Ok(v) => v,
+                Err(e) => {
+                    tracing::warn!("tool '{}' has invalid parameters JSON: {e}", t.function.name);
+                    return None;
+                }
+            };
+            let schema: schemars::Schema = match serde_json::from_value(params) {
+                Ok(s) => s,
+                Err(e) => {
+                    tracing::warn!("tool '{}' has invalid JSON Schema: {e}", t.function.name);
+                    return None;
+                }
+            };
             Some(ollama_rs::generation::tools::ToolInfo {
                 tool_type: ollama_rs::generation::tools::ToolType::Function,
                 function: ollama_rs::generation::tools::ToolFunctionInfo {
@@ -153,6 +166,7 @@ async fn handle_chat(ollama: &Ollama, req: ChatRequest) -> anyhow::Result<Respon
                 },
             })
         }).collect();
+        tracing::info!("{} tools successfully parsed (of {} total)", tool_infos.len(), req.tools.len());
         request = request.tools(tool_infos);
     }
 
