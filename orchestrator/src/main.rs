@@ -71,6 +71,8 @@ async fn main() -> anyhow::Result<()> {
 
     let args = Args::parse();
 
+    tracing::info!("cocompute-orchestrator v{}", env!("CARGO_PKG_VERSION"));
+
     // Initialize database
     let db_url = format!("sqlite://{}?mode=rwc", args.db_path);
     let db = Database::connect(&db_url).await?;

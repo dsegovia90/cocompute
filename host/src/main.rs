@@ -397,6 +397,11 @@ async fn connect_and_serve(
 
     let heartbeat_handle = tokio::spawn(async move {
         let mut interval = tokio::time::interval(std::time::Duration::from_secs(15));
+        let mut consecutive_failures: u32 = 0;
+        const MAX_FAILURES: u32 = 3;
+
+        tracing::info!("heartbeat task started (15s interval)");
+
         loop {
             interval.tick().await;
 
@@ -404,8 +409,32 @@ async fn connect_and_serve(
             let new_caps = match discover_capabilities(&heartbeat_ollama).await {
                 Ok(caps) => caps,
                 Err(e) => {
-                    tracing::debug!("model discovery failed: {e}");
-                    continue;
+                    tracing::warn!("heartbeat: model discovery failed: {e}");
+                    // Still send a heartbeat even if discovery fails
+                    match heartbeat_conn.open_bi().await {
+                        Ok((send, recv)) => {
+                            let req = Request::Registry(RegistryRequest::Heartbeat);
+                            if write_p2p(send, req).await.is_ok() {
+                                if read_p2p::<Response>(recv).await.is_ok() {
+                                    consecutive_failures = 0;
+                                    continue;
+                                }
+                            }
+                            consecutive_failures += 1;
+                            tracing::warn!("heartbeat failed ({consecutive_failures}/{MAX_FAILURES})");
+                            if consecutive_failures >= MAX_FAILURES {
+                                tracing::error!("heartbeat failed {MAX_FAILURES} times, closing connection");
+                                heartbeat_conn.close(0u32.into(), b"heartbeat failed");
+                                break;
+                            }
+                            continue;
+                        }
+                        Err(e) => {
+                            tracing::error!("heartbeat open_bi failed: {e}, closing connection");
+                            heartbeat_conn.close(0u32.into(), b"heartbeat failed");
+                            break;
+                        }
+                    }
                 }
             };
 
@@ -417,29 +446,45 @@ async fn connect_and_serve(
                 last_models = new_models;
                 Request::Registry(RegistryRequest::Register(new_caps))
             } else {
-                // Send heartbeat to keep the QUIC connection alive
                 Request::Registry(RegistryRequest::Heartbeat)
             };
+
             match heartbeat_conn.open_bi().await {
                 Ok((send, recv)) => {
                     if let Err(e) = write_p2p(send, req).await {
-                        tracing::warn!("heartbeat/registration send failed: {e}");
-                        break;
+                        consecutive_failures += 1;
+                        tracing::warn!("heartbeat send failed ({consecutive_failures}/{MAX_FAILURES}): {e}");
+                        if consecutive_failures >= MAX_FAILURES {
+                            tracing::error!("heartbeat failed {MAX_FAILURES} times, closing connection");
+                            heartbeat_conn.close(0u32.into(), b"heartbeat failed");
+                            break;
+                        }
+                        continue;
                     }
                     match read_p2p::<Response>(recv).await {
-                        Ok(_) => tracing::debug!("heartbeat ack"),
+                        Ok(_) => {
+                            consecutive_failures = 0;
+                            tracing::debug!("heartbeat ack");
+                        }
                         Err(e) => {
-                            tracing::warn!("heartbeat/registration recv failed: {e}");
-                            break;
+                            consecutive_failures += 1;
+                            tracing::warn!("heartbeat recv failed ({consecutive_failures}/{MAX_FAILURES}): {e}");
+                            if consecutive_failures >= MAX_FAILURES {
+                                tracing::error!("heartbeat failed {MAX_FAILURES} times, closing connection");
+                                heartbeat_conn.close(0u32.into(), b"heartbeat failed");
+                                break;
+                            }
                         }
                     }
                 }
                 Err(e) => {
-                    tracing::warn!("heartbeat open_bi failed: {e}");
+                    tracing::error!("heartbeat open_bi failed: {e}, closing connection");
+                    heartbeat_conn.close(0u32.into(), b"heartbeat failed");
                     break;
                 }
             }
         }
+        tracing::info!("heartbeat task exiting");
     });
 
     // Step 3: Loop accepting inference streams from the orchestrator
@@ -570,6 +615,8 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let args = Args::parse();
+
+    tracing::info!("cocompute-host v{}", env!("CARGO_PKG_VERSION"));
 
     let orchestrator_url = args.orchestrator_url.clone();
 
