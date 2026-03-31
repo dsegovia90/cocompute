@@ -37,10 +37,6 @@ struct Args {
     #[arg(long, env = "COCOMPUTE_ORCHESTRATOR_ID")]
     orchestrator_id: Option<String>,
 
-    /// Path to persist the iroh secret key for stable EndpointId
-    #[arg(long, default_value = "~/.cocompute/host.key", env = "COCOMPUTE_KEY_PATH")]
-    key_path: String,
-
     /// Automatically check for updates on startup
     #[arg(long, default_value = "false", env = "COCOMPUTE_AUTO_UPDATE")]
     auto_update: bool,
@@ -517,48 +513,34 @@ async fn connect_and_serve(
         loop {
             interval.tick().await;
 
-            // Check if Ollama models changed
-            let new_caps = match discover_capabilities(&heartbeat_ollama).await {
-                Ok(caps) => caps,
-                Err(e) => {
-                    tracing::warn!("heartbeat: model discovery failed: {e}");
-                    // Still send a heartbeat even if discovery fails
-                    match heartbeat_conn.open_bi().await {
-                        Ok((send, recv)) => {
-                            let req = Request::Registry(RegistryRequest::Heartbeat);
-                            if write_p2p(send, req).await.is_ok() {
-                                if read_p2p::<Response>(recv).await.is_ok() {
-                                    consecutive_failures = 0;
-                                    continue;
-                                }
-                            }
-                            consecutive_failures += 1;
-                            tracing::warn!("heartbeat failed ({consecutive_failures}/{MAX_FAILURES})");
-                            if consecutive_failures >= MAX_FAILURES {
-                                tracing::error!("heartbeat failed {MAX_FAILURES} times, closing connection");
-                                heartbeat_conn.close(0u32.into(), b"heartbeat failed");
-                                break;
-                            }
-                            continue;
-                        }
-                        Err(e) => {
-                            tracing::error!("heartbeat open_bi failed: {e}, closing connection");
-                            heartbeat_conn.close(0u32.into(), b"heartbeat failed");
-                            break;
-                        }
+            // Send heartbeat first, then check models. Model discovery calls Ollama
+            // which can block if a model is loading or running inference. The heartbeat
+            // keeping the QUIC connection alive must never be blocked by Ollama.
+            let discovery_start = std::time::Instant::now();
+            let req = match tokio::time::timeout(
+                std::time::Duration::from_secs(5),
+                discover_capabilities(&heartbeat_ollama),
+            ).await {
+                Ok(Ok(new_caps)) => {
+                    tracing::debug!("heartbeat: model discovery took {}ms", discovery_start.elapsed().as_millis());
+                    let mut new_models: Vec<String> = new_caps.models.iter().map(|m| m.name.clone()).collect();
+                    new_models.sort();
+                    if new_models != last_models {
+                        tracing::info!("model list changed, re-registering with orchestrator");
+                        last_models = new_models;
+                        Request::Registry(RegistryRequest::Register(new_caps))
+                    } else {
+                        Request::Registry(RegistryRequest::Heartbeat)
                     }
                 }
-            };
-
-            let mut new_models: Vec<String> = new_caps.models.iter().map(|m| m.name.clone()).collect();
-            new_models.sort();
-
-            let req = if new_models != last_models {
-                tracing::info!("model list changed, re-registering with orchestrator");
-                last_models = new_models;
-                Request::Registry(RegistryRequest::Register(new_caps))
-            } else {
-                Request::Registry(RegistryRequest::Heartbeat)
+                Ok(Err(e)) => {
+                    tracing::warn!("heartbeat: model discovery failed after {}ms: {e}", discovery_start.elapsed().as_millis());
+                    Request::Registry(RegistryRequest::Heartbeat)
+                }
+                Err(_) => {
+                    tracing::warn!("heartbeat: model discovery timed out after 5s (Ollama busy?)");
+                    Request::Registry(RegistryRequest::Heartbeat)
+                }
             };
 
             match heartbeat_conn.open_bi().await {
@@ -576,7 +558,7 @@ async fn connect_and_serve(
                     match read_p2p::<Response>(recv).await {
                         Ok(_) => {
                             consecutive_failures = 0;
-                            tracing::debug!("heartbeat ack");
+                            tracing::debug!("heartbeat ack ({}ms)", discovery_start.elapsed().as_millis());
                         }
                         Err(e) => {
                             consecutive_failures += 1;
@@ -778,11 +760,7 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
-    let key_path = common::key::expand_tilde(&args.key_path);
-    let secret_key = common::key::load_or_create_secret_key(&key_path)?;
-
     let endpoint = iroh::Endpoint::builder(iroh::endpoint::presets::N0)
-        .secret_key(secret_key)
         .bind()
         .await?;
 

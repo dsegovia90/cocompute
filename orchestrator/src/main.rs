@@ -36,10 +36,6 @@ struct Args {
     #[arg(long, default_value = "./cocompute.db", env = "COCOMPUTE_DB_PATH")]
     db_path: String,
 
-    /// Path to persist the iroh secret key for stable EndpointId
-    #[arg(long, default_value = "~/.cocompute/orchestrator.key", env = "COCOMPUTE_KEY_PATH")]
-    key_path: String,
-
     #[command(subcommand)]
     command: Option<Command>,
 }
@@ -97,11 +93,7 @@ async fn main() -> anyhow::Result<()> {
         Command::Serve => {
             tracing::info!("database initialized at {}", args.db_path);
 
-            let key_path = common::key::expand_tilde(&args.key_path);
-            let secret_key = common::key::load_or_create_secret_key(&key_path)?;
-
             let endpoint = Endpoint::builder(iroh::endpoint::presets::N0)
-                .secret_key(secret_key)
                 .bind()
                 .await?;
             let endpoint_id = format!("{}", endpoint.addr().id);

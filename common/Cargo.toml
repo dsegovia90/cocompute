@@ -7,6 +7,5 @@ edition = "2024"
 anyhow = "1.0.102"
 bitcode = "0.6.9"
 iroh = { workspace = true }
-rand = "0.9"
 serde = { workspace = true }
 tokio = { workspace = true }

@@ -108,7 +108,10 @@ impl iroh::protocol::ProtocolHandler for HostAcceptor {
                             }
                         }
                     }
-                    Err(_) => break, // Connection closed
+                    Err(e) => {
+                        tracing::info!("host {endpoint_id} connection closed: {e}");
+                        break;
+                    }
                 }
             }
 
