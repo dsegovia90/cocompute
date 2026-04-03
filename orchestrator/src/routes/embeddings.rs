@@ -1,0 +1,54 @@
+use axum::{Extension, Json, extract::State};
+use common::protocols::Request;
+
+use crate::{
+    AppState,
+    auth::ApiKeyId,
+    error::AppError,
+    openai::{OpenAIEmbeddingData, OpenAIEmbeddingsRequest, OpenAIEmbeddingsResponse, OpenAIUsage},
+    proxy::{log_metering, route_to_host},
+};
+
+/// POST /v1/embeddings — OpenAI-compatible embeddings endpoint.
+pub(crate) async fn create_embeddings(
+    State(state): State<AppState>,
+    Extension(api_key_id): Extension<ApiKeyId>,
+    Json(payload): Json<OpenAIEmbeddingsRequest>,
+) -> Result<Json<OpenAIEmbeddingsResponse>, AppError> {
+    use common::protocols::Response;
+
+    let model = payload.model.clone();
+
+    // Translate OpenAI format → internal protocol
+    let internal_request = common::protocols::embeddings::EmbeddingsRequest {
+        model: payload.model,
+        text: payload.input,
+    };
+
+    let request = Request::Embeddings(internal_request);
+    let (response, host_id) = route_to_host(&state, &model, request).await?;
+
+    match response {
+        Response::Embeddings { result, ref metering } => {
+            log_metering(
+                state.db.clone(),
+                host_id,
+                model.clone(),
+                "embeddings".into(),
+                metering,
+                Some(api_key_id.0),
+            );
+            Ok(Json(OpenAIEmbeddingsResponse {
+                object: "list",
+                data: vec![OpenAIEmbeddingData {
+                    object: "embedding",
+                    embedding: result.embeddings,
+                    index: 0,
+                }],
+                model,
+                usage: OpenAIUsage::from_metering(metering),
+            }))
+        }
+        _ => Err(AppError::Internal(anyhow::anyhow!("unexpected response type"))),
+    }
+}
