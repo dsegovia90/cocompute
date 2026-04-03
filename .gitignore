@@ -4,3 +4,5 @@ target
 *.db-wal
 .DS_Store
 *.key
+.pi/
+context.md
