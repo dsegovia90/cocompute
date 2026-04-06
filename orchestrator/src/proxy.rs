@@ -6,6 +6,14 @@ use sea_orm::{ActiveModelTrait, DatabaseConnection, Set};
 
 use crate::{db, error::AppError, AppState};
 
+/// Extract the current QUIC RTT from a connection's selected path.
+pub(crate) fn connection_rtt_ms(connection: &iroh::endpoint::Connection) -> Option<f64> {
+    let info = connection.to_info();
+    let path = info.selected_path()?;
+    let rtt = path.rtt()?;
+    Some(rtt.as_secs_f64() * 1000.0)
+}
+
 /// Send a request to a host using its stored connection.
 /// Opens a new bi-stream on the existing connection.
 pub(crate) async fn send_to_host(
@@ -29,18 +37,20 @@ pub(crate) async fn send_to_host(
 }
 
 /// Route a request to the appropriate host based on model name.
+/// Returns (response, endpoint_id, iroh_rtt_ms).
 pub(crate) async fn route_to_host(
     state: &AppState,
     model: &str,
     request: Request,
-) -> Result<(Response, String), AppError> {
+) -> Result<(Response, String, Option<f64>), AppError> {
     let host = state.hosts.find_host_for_model(model).await;
 
     match host {
         Some(h) => {
             let eid = h.endpoint_id.clone();
             let resp = send_to_host(&h.connection, request).await?;
-            Ok((resp, eid))
+            let rtt = connection_rtt_ms(&h.connection);
+            Ok((resp, eid, rtt))
         }
         None => {
             let available = state.hosts.available_models().await;
@@ -62,6 +72,7 @@ pub(crate) fn log_metering(
     metering: &Metering,
     api_key_id: Option<i32>,
     total_ms: Option<i64>,
+    iroh_rtt_ms: Option<f64>,
 ) {
     let m = metering.clone();
     tokio::spawn(async move {
@@ -73,6 +84,7 @@ pub(crate) fn log_metering(
             completion_tokens: Set(m.completion_tokens as i32),
             compute_ms: Set(m.compute_ms as i64),
             total_ms: Set(total_ms),
+            iroh_rtt_ms: Set(iroh_rtt_ms),
             created_at: Set(chrono::Utc::now()),
             api_key_id: Set(api_key_id),
             ..Default::default()

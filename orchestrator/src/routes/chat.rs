@@ -14,7 +14,7 @@ use crate::{
         OpenAIChatStreamChunk, OpenAIChatStreamChoice, OpenAIChatStreamDelta,
         OpenAIChatMessageRaw, OpenAIUsage,
     },
-    proxy::{log_metering, route_to_host},
+    proxy::{connection_rtt_ms, log_metering, route_to_host},
 };
 
 /// POST /v1/chat/completions — OpenAI-compatible chat endpoint.
@@ -56,7 +56,7 @@ pub(crate) async fn create_chat_completion_sync(
 ) -> Result<axum::response::Response, AppError> {
     let request = Request::Chat(internal_request);
     let start = std::time::Instant::now();
-    let (response, host_id) = route_to_host(&state, &model, request).await?;
+    let (response, host_id, iroh_rtt) = route_to_host(&state, &model, request).await?;
     let total_ms = start.elapsed().as_millis() as i64;
 
     match response {
@@ -69,6 +69,7 @@ pub(crate) async fn create_chat_completion_sync(
                 metering,
                 Some(api_key_id),
                 Some(total_ms),
+                iroh_rtt,
             );
             let created = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -149,7 +150,7 @@ pub(crate) async fn create_chat_completion_stream(
     };
 
     let host_id = host.endpoint_id.clone();
-    let conn = &host.connection;
+    let conn = host.connection.clone();
 
     let (send, mut recv) = conn
         .open_bi()
@@ -271,7 +272,8 @@ pub(crate) async fn create_chat_completion_stream(
                 }
                 Ok(Some(ChatStreamFrame::Done(metering))) => {
                     let total_ms = start.elapsed().as_millis() as i64;
-                    log_metering(db.clone(), host_id.clone(), model_clone.clone(), "chat_stream".into(), &metering, Some(api_key_id), Some(total_ms));
+                    let iroh_rtt = connection_rtt_ms(&conn);
+                    log_metering(db.clone(), host_id.clone(), model_clone.clone(), "chat_stream".into(), &metering, Some(api_key_id), Some(total_ms), iroh_rtt);
 
                     // Final chunk with finish_reason
                     yield Ok(Event::default().data(serde_json::to_string(&OpenAIChatStreamChunk {

@@ -12,6 +12,7 @@ impl MigrationName for M20260406AddTotalMsToMeteringLogs {
 enum MeteringLogs {
     Table,
     TotalMs,
+    IrohRttMs,
 }
 
 #[async_trait::async_trait]
@@ -24,6 +25,14 @@ impl MigrationTrait for M20260406AddTotalMsToMeteringLogs {
                     .add_column(ColumnDef::new(MeteringLogs::TotalMs).big_integer().null())
                     .to_owned(),
             )
+            .await?;
+        manager
+            .alter_table(
+                Table::alter()
+                    .table(MeteringLogs::Table)
+                    .add_column(ColumnDef::new(MeteringLogs::IrohRttMs).double().null())
+                    .to_owned(),
+            )
             .await
     }
 
@@ -33,6 +42,14 @@ impl MigrationTrait for M20260406AddTotalMsToMeteringLogs {
                 Table::alter()
                     .table(MeteringLogs::Table)
                     .drop_column(MeteringLogs::TotalMs)
+                    .to_owned(),
+            )
+            .await?;
+        manager
+            .alter_table(
+                Table::alter()
+                    .table(MeteringLogs::Table)
+                    .drop_column(MeteringLogs::IrohRttMs)
                     .to_owned(),
             )
             .await
