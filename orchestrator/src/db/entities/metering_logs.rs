@@ -11,6 +11,7 @@ pub struct Model {
     pub prompt_tokens: i32,
     pub completion_tokens: i32,
     pub compute_ms: i64,
+    pub total_ms: Option<i64>,
     pub created_at: DateTimeUtc,
     pub api_key_id: Option<i32>,
 }

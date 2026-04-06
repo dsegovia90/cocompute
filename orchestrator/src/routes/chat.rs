@@ -55,7 +55,9 @@ pub(crate) async fn create_chat_completion_sync(
     api_key_id: i32,
 ) -> Result<axum::response::Response, AppError> {
     let request = Request::Chat(internal_request);
+    let start = std::time::Instant::now();
     let (response, host_id) = route_to_host(&state, &model, request).await?;
+    let total_ms = start.elapsed().as_millis() as i64;
 
     match response {
         Response::Chat { result, ref metering } => {
@@ -66,6 +68,7 @@ pub(crate) async fn create_chat_completion_sync(
                 "chat".into(),
                 metering,
                 Some(api_key_id),
+                Some(total_ms),
             );
             let created = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -129,6 +132,7 @@ pub(crate) async fn create_chat_completion_stream(
     api_key_id: i32,
 ) -> Result<axum::response::Response, AppError> {
     let request = Request::Chat(internal_request);
+    let start = std::time::Instant::now();
 
     // Find host and open a bi-stream
     let host = state.hosts.find_host_for_model(&model).await;
@@ -266,7 +270,8 @@ pub(crate) async fn create_chat_completion_stream(
                     has_tool_calls = true;
                 }
                 Ok(Some(ChatStreamFrame::Done(metering))) => {
-                    log_metering(db.clone(), host_id.clone(), model_clone.clone(), "chat_stream".into(), &metering, Some(api_key_id));
+                    let total_ms = start.elapsed().as_millis() as i64;
+                    log_metering(db.clone(), host_id.clone(), model_clone.clone(), "chat_stream".into(), &metering, Some(api_key_id), Some(total_ms));
 
                     // Final chunk with finish_reason
                     yield Ok(Event::default().data(serde_json::to_string(&OpenAIChatStreamChunk {

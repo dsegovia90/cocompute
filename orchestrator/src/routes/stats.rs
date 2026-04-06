@@ -30,6 +30,8 @@ pub(crate) async fn get_stats(
                 "prompt_tokens": r.prompt_tokens,
                 "completion_tokens": r.completion_tokens,
                 "compute_ms": r.compute_ms,
+                "total_ms": r.total_ms,
+                "overhead_ms": r.total_ms.map(|t| t - r.compute_ms),
                 "created_at": r.created_at.to_string(),
             })
         })

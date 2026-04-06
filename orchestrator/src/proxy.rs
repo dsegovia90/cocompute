@@ -61,6 +61,7 @@ pub(crate) fn log_metering(
     request_type: String,
     metering: &Metering,
     api_key_id: Option<i32>,
+    total_ms: Option<i64>,
 ) {
     let m = metering.clone();
     tokio::spawn(async move {
@@ -71,6 +72,7 @@ pub(crate) fn log_metering(
             prompt_tokens: Set(m.prompt_tokens as i32),
             completion_tokens: Set(m.completion_tokens as i32),
             compute_ms: Set(m.compute_ms as i64),
+            total_ms: Set(total_ms),
             created_at: Set(chrono::Utc::now()),
             api_key_id: Set(api_key_id),
             ..Default::default()

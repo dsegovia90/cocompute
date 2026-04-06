@@ -26,7 +26,9 @@ pub(crate) async fn create_embeddings(
     };
 
     let request = Request::Embeddings(internal_request);
+    let start = std::time::Instant::now();
     let (response, host_id) = route_to_host(&state, &model, request).await?;
+    let total_ms = start.elapsed().as_millis() as i64;
 
     match response {
         Response::Embeddings { result, ref metering } => {
@@ -37,6 +39,7 @@ pub(crate) async fn create_embeddings(
                 "embeddings".into(),
                 metering,
                 Some(api_key_id.0),
+                Some(total_ms),
             );
             Ok(Json(OpenAIEmbeddingsResponse {
                 object: "list",
