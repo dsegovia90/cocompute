@@ -4,7 +4,7 @@ if(!sc) return;
 var cv=document.getElementById('network-cv');
 var ctxC=cv.getContext('2d');
 var ui=document.getElementById('network-ui');
-var W=0,H=0,dpr=1;
+var W=0,H=0,dpr=1,mobile=false;
 var cards={};
 var pths={};
 var reqs=[];
@@ -41,14 +41,27 @@ function doInit(){
   var r=sc.getBoundingClientRect();
   dpr=window.devicePixelRatio||1;
   W=r.width; H=r.height;
+  mobile=W<640;
   cv.width=W*dpr; cv.height=H*dpr;
   ctxC.setTransform(dpr,0,0,dpr,0,0);
+  reqs=[];
   buildLayout();
 }
 
 function buildLayout(){
   ui.innerHTML='';
   cards={};
+  pths={};
+
+  if(mobile){
+    buildMobile();
+  } else {
+    buildDesktop();
+  }
+  renderCards();
+}
+
+function buildDesktop(){
   var cw=Math.min(W*0.115,96);
   var ch=Math.min(H*0.2,88);
   var gpW=Math.min(W*0.155,138);
@@ -71,7 +84,7 @@ function buildLayout(){
     cards[GP[i].id]={x:xx,y:yy,w:gpW,h:gpH,cx:xx+gpW/2,cy:yy+gpH/2,rad:12,glow:0,gc:null};
   }
 
-  pths={};
+  // horizontal bezier paths
   for(var i=0;i<CL.length;i++){
     var cd=cards[CL[i].id], hb=cards.hub;
     var sx=cd.x+cd.w, ex=hb.x;
@@ -84,9 +97,60 @@ function buildLayout(){
     pths['hub_'+GP[i].id]=[sx,hb.cy, sx+(ex-sx)*0.5,hb.cy, sx+(ex-sx)*0.5,gd.cy, ex,gd.cy];
     pths[GP[i].id+'_hub']=[ex,gd.cy, sx+(ex-sx)*0.5,gd.cy, sx+(ex-sx)*0.5,hb.cy, sx,hb.cy];
   }
+}
 
+function buildMobile(){
+  var cw=Math.min(W*0.22,80);
+  var ch=70;
+  var gpW=Math.min(W*0.26,100);
+  var gpH=44;
+  var hubW=Math.min(W*0.32,115);
+  var hubH=80;
+
+  // clients row at top
+  var clY=H*0.06;
+  var clSpan=W*0.8;
+  var clStart=(W-clSpan)/2;
+  for(var i=0;i<CL.length;i++){
+    var xx=clStart+clSpan*i/(CL.length-1)-cw/2;
+    cards[CL[i].id]={x:xx,y:clY,w:cw,h:ch,cx:xx+cw/2,cy:clY+ch/2,rad:14,glow:0,gc:null};
+  }
+
+  // orchestrator in middle
+  var hubY=H*0.5-hubH/2;
+  cards.hub={x:W*0.5-hubW/2,y:hubY,w:hubW,h:hubH,cx:W*0.5,cy:hubY+hubH/2,rad:16,glow:0,gc:null};
+
+  // GPUs row at bottom
+  var gpY=H*0.82;
+  var gpSpan=W*0.9;
+  var gpStart=(W-gpSpan)/2;
+  // show fewer GPUs on mobile to avoid cramming
+  var gpCount=Math.min(GP.length,3);
+  for(var i=0;i<gpCount;i++){
+    var xx=gpStart+gpSpan*i/(gpCount-1)-gpW/2;
+    cards[GP[i].id]={x:xx,y:gpY,w:gpW,h:gpH,cx:xx+gpW/2,cy:gpY+gpH/2,rad:12,glow:0,gc:null};
+  }
+
+  // vertical bezier paths: clients -> hub (top to middle)
+  for(var i=0;i<CL.length;i++){
+    var cd=cards[CL[i].id], hb=cards.hub;
+    var sy=cd.y+cd.h, ey=hb.y;
+    pths[CL[i].id+'_hub']=[cd.cx,sy, cd.cx,sy+(ey-sy)*0.5, hb.cx,sy+(ey-sy)*0.5, hb.cx,ey];
+    pths['hub_'+CL[i].id]=[hb.cx,ey, hb.cx,sy+(ey-sy)*0.5, cd.cx,sy+(ey-sy)*0.5, cd.cx,sy];
+  }
+  // hub -> GPUs (middle to bottom)
+  for(var i=0;i<gpCount;i++){
+    var gd=cards[GP[i].id], hb=cards.hub;
+    var sy=hb.y+hb.h, ey=gd.y;
+    pths['hub_'+GP[i].id]=[hb.cx,sy, hb.cx,sy+(ey-sy)*0.5, gd.cx,sy+(ey-sy)*0.5, gd.cx,ey];
+    pths[GP[i].id+'_hub']=[gd.cx,ey, gd.cx,sy+(ey-sy)*0.5, hb.cx,sy+(ey-sy)*0.5, hb.cx,sy];
+  }
+}
+
+function renderCards(){
   for(var i=0;i<CL.length;i++){
     var c=CL[i], cd=cards[c.id];
+    if(!cd) continue;
     var d=document.createElement('div');
     d.style.cssText='position:absolute;left:'+cd.x+'px;top:'+cd.y+'px;width:'+cd.w+'px;height:'+cd.h+'px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px';
     d.innerHTML='<div style="color:#67e8f9;opacity:0.85">'+clientIcons[c.icon]+'</div>'
@@ -97,6 +161,7 @@ function buildLayout(){
 
   for(var i=0;i<GP.length;i++){
     var g=GP[i], gd=cards[g.id];
+    if(!gd) continue;
     var d=document.createElement('div');
     d.style.cssText='position:absolute;left:'+gd.x+'px;top:'+gd.y+'px;width:'+gd.w+'px;height:'+gd.h+'px;display:flex;align-items:center;gap:10px;padding:0 12px';
     d.innerHTML='<div style="color:#34d399;opacity:0.85;flex-shrink:0">'+svgChip+'</div>'
@@ -126,10 +191,11 @@ function bz(p,t){
 
 function spawnReq(){
   var ci=Math.floor(Math.random()*CL.length);
-  var gi=Math.floor(Math.random()*GP.length);
+  var gpCount=mobile?Math.min(GP.length,3):GP.length;
+  var gi=Math.floor(Math.random()*gpCount);
   var col=COLORS[colorIdx%COLORS.length];
   colorIdx++;
-  reqs.push({cid:CL[ci].id, gid:GP[gi].id, col:col, st:0, t:0, spd:0.015+Math.random()*0.006, dw:0, dwMax:0, trail:[], sz:2.2});
+  reqs.push({cid:CL[ci].id, gid:GP[gi].id, col:col, st:0, t:0, spd:0.006+Math.random()*0.003, dw:0, dwMax:0, trail:[], sz:2.2});
 }
 
 function pathFor(r){
@@ -156,14 +222,14 @@ function stepSim(){
       if(r.t>=1){
         r.t=0; r.st++; r.dw=0;
         if(r.st===1){r.dwMax=30+Math.random()*18|0; cards.hub.glow=1; cards.hub.gc=r.col;}
-        if(r.st===3){r.dwMax=50+Math.random()*30|0; cards[r.gid].glow=1; cards[r.gid].gc=r.col;}
+        if(r.st===3&&cards[r.gid]){r.dwMax=50+Math.random()*30|0; cards[r.gid].glow=1; cards[r.gid].gc=r.col;}
         if(r.st===5){r.dwMax=14+Math.random()*8|0; cards.hub.glow=Math.max(cards.hub.glow,0.8); cards.hub.gc=r.col;}
         if(r.st===7){cards[r.cid].glow=0.7; cards[r.cid].gc=r.col; r.dwMax=6;}
       }
     } else {
       r.dw++;
       if(r.st===1||r.st===5) cards.hub.glow=Math.max(cards.hub.glow, 0.3+0.6*Math.sin(r.dw*0.18));
-      if(r.st===3) cards[r.gid].glow=Math.max(cards[r.gid].glow, 0.3+0.6*Math.sin(r.dw*0.14));
+      if(r.st===3&&cards[r.gid]) cards[r.gid].glow=Math.max(cards[r.gid].glow, 0.3+0.6*Math.sin(r.dw*0.14));
       if(r.dw>=r.dwMax){r.st++; r.t=0; r.trail=[];}
     }
   }
@@ -174,8 +240,8 @@ function stepSim(){
   }
   reqs=reqs.filter(function(r){return r.st<8;});
   cards.hub.glow*=0.96;
-  for(i=0;i<CL.length;i++) cards[CL[i].id].glow*=0.92;
-  for(i=0;i<GP.length;i++) cards[GP[i].id].glow*=0.92;
+  for(i=0;i<CL.length;i++) if(cards[CL[i].id]) cards[CL[i].id].glow*=0.92;
+  for(i=0;i<GP.length;i++) if(cards[GP[i].id]) cards[GP[i].id].glow*=0.92;
 }
 
 function rrPath(x,y,w,h,rad){
@@ -222,18 +288,20 @@ function renderFrame(){
   }
 
   var i;
-  for(i=0;i<CL.length;i++) drawGlow(cards[CL[i].id],COLORS[0]);
-  for(i=0;i<GP.length;i++) drawGlow(cards[GP[i].id],COLORS[2]);
+  for(i=0;i<CL.length;i++) if(cards[CL[i].id]) drawGlow(cards[CL[i].id],COLORS[0]);
+  for(i=0;i<GP.length;i++) if(cards[GP[i].id]) drawGlow(cards[GP[i].id],COLORS[2]);
   drawGlow(cards.hub,COLORS[1]);
 
   for(i=0;i<CL.length;i++){
     var cd=cards[CL[i].id];
+    if(!cd) continue;
     rrPath(cd.x,cd.y,cd.w,cd.h,cd.rad);
     ctxC.fillStyle='rgba(17,19,33,0.92)'; ctxC.fill();
     ctxC.strokeStyle='rgba(50,58,88,'+(0.3+cd.glow*0.35)+')'; ctxC.lineWidth=0.7; ctxC.stroke();
   }
   for(i=0;i<GP.length;i++){
     var gd=cards[GP[i].id];
+    if(!gd) continue;
     rrPath(gd.x,gd.y,gd.w,gd.h,gd.rad);
     ctxC.fillStyle='rgba(17,19,33,0.92)'; ctxC.fill();
     ctxC.strokeStyle='rgba(50,58,88,'+(0.3+gd.glow*0.35)+')'; ctxC.lineWidth=0.7; ctxC.stroke();
@@ -280,9 +348,7 @@ function renderFrame(){
 function mainLoop(){
   stepSim();
   renderFrame();
-  if(fr%72===0) spawnReq();
-  if(fr%72===24) spawnReq();
-  if(fr%72===48) spawnReq();
+  if(fr%120===0) spawnReq();
   fr++;
   requestAnimationFrame(mainLoop);
 }

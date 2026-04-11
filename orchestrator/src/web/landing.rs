@@ -36,7 +36,7 @@ fn Landing() -> impl IntoView {
                     // ── Network animation ──
                     <div
                         id="network-sc"
-                        class="mt-12 w-full max-w-4xl rounded-2xl overflow-hidden"
+                        class="mt-12 w-full max-w-4xl rounded-2xl overflow-hidden max-sm:aspect-auto max-sm:min-h-[600px]"
                         style="position:relative;aspect-ratio:2.1/1;min-height:460px"
                     >
                         <canvas
