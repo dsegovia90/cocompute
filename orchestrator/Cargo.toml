@@ -14,6 +14,7 @@ common = { path = "../common/" }
 futures = "0.3.32"
 hex = "0.4.3"
 iroh = { workspace = true }
+leptos = { version = "0.8", features = ["ssr"] }
 rand = "0.9"
 sea-orm = { version = "1.1.19", features = ["sqlx-sqlite", "runtime-tokio-rustls", "macros"] }
 sea-orm-migration = "1.1.19"
@@ -22,6 +23,6 @@ serde_json = "1.0.149"
 sha2 = "0.10"
 tokio = { workspace = true }
 tokio-stream = "0.1.18"
-tower-http = { version = "0.6.8", features = ["trace"] }
+tower-http = { version = "0.6.8", features = ["trace", "fs"] }
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter", "fmt"] }
