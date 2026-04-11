@@ -274,21 +274,6 @@ function renderFrame(){
       ctxC.beginPath(); ctxC.arc(hd.x,hd.y,r.sz*0.7,0,6.283);
       ctxC.fillStyle='rgba(255,255,255,0.88)'; ctxC.fill();
     }
-    if(!mv && r.st<8){
-      var nx=0,ny=0,valid=false;
-      if(r.st===1||r.st===5){nx=cards.hub.cx; ny=cards.hub.cy; valid=true;}
-      else if(r.st===3){nx=cards[r.gid].cx; ny=cards[r.gid].cy; valid=true;}
-      else if(r.st===7){nx=cards[r.cid].cx; ny=cards[r.cid].cy; valid=true;}
-      if(valid){
-        var prog=r.dw/r.dwMax;
-        var ring=4+prog*20;
-        ctxC.beginPath(); ctxC.arc(nx,ny,ring,0,6.283);
-        ctxC.strokeStyle=rs+(0.28*(1-prog))+')'; ctxC.lineWidth=1.5; ctxC.stroke();
-        var pulse=Math.sin(r.dw*0.22)*0.3+0.7;
-        ctxC.beginPath(); ctxC.arc(nx,ny,3*pulse,0,6.283);
-        ctxC.fillStyle=rs+(0.45*(1-prog))+')'; ctxC.fill();
-      }
-    }
   }
 }
 
