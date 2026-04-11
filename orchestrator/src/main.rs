@@ -28,6 +28,10 @@ struct Args {
     #[arg(long, default_value = "./cocompute.db", env = "COCOMPUTE_DB_PATH")]
     db_path: String,
 
+    /// Static files directory
+    #[arg(long, default_value = "orchestrator/static", env = "COCOMPUTE_STATIC_DIR")]
+    static_dir: String,
+
     #[command(subcommand)]
     command: Option<Command>,
 }
@@ -115,7 +119,7 @@ async fn main() -> anyhow::Result<()> {
                 .route("/v1/stats", get(routes::stats::get_stats))
                 .route_layer(middleware::from_fn_with_state(db, auth::require_api_key))
                 // Web UI
-                .merge(web::router())
+                .merge(web::router(&args.static_dir))
                 // Host discovery + updates
                 .route("/v1/node-info", get(routes::system::get_node_info))
                 .route("/v1/version", get(routes::system::get_version))

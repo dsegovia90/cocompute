@@ -1,6 +1,5 @@
 use axum::response::Html;
 use leptos::prelude::*;
-
 use super::components::*;
 
 #[component]
@@ -93,7 +92,6 @@ fn Landing() -> impl IntoView {
                             icon="shopping-bag"
                             title="Marketplace"
                             description="Need more compute? Tap into GPUs shared by others. Or earn credits by sharing your idle GPU."
-                            badge=("~$0.50 / 1M tokens", "bg-indigo-500/20 text-indigo-500")
                         />
                     </div>
                 </section>
@@ -163,6 +161,5 @@ fn Landing() -> impl IntoView {
 }
 
 pub async fn landing() -> Html<String> {
-    let html = Landing().into_view().to_html();
-    Html(format!("<!DOCTYPE html>{html}"))
+    super::render(Landing())
 }

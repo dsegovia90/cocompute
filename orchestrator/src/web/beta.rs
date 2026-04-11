@@ -1,6 +1,5 @@
 use axum::response::Html;
 use leptos::prelude::*;
-
 use super::components::*;
 
 #[component]
@@ -32,7 +31,7 @@ fn BetaInvite() -> impl IntoView {
         <Base title="cocompute — beta invite">
             <PageShell>
                 <div class="flex items-center justify-center min-h-screen py-12">
-                    <form class="w-[480px] rounded-xl bg-[#16161E] border border-[#27272A] px-9 py-10 flex flex-col gap-6">
+                    <form method="POST" action="/beta" class="w-[480px] rounded-xl bg-[#16161E] border border-[#27272A] px-9 py-10 flex flex-col gap-6">
 
                         // Header
                         <div class="flex flex-col gap-2">
@@ -83,6 +82,5 @@ fn BetaInvite() -> impl IntoView {
 }
 
 pub async fn beta() -> Html<String> {
-    let html = BetaInvite().into_view().to_html();
-    Html(format!("<!DOCTYPE html>{html}"))
+    super::render(BetaInvite())
 }

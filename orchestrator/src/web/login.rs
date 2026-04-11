@@ -1,6 +1,5 @@
 use axum::response::Html;
 use leptos::prelude::*;
-
 use super::components::*;
 
 #[component]
@@ -9,15 +8,15 @@ fn Login() -> impl IntoView {
         <Base title="cocompute — sign in">
             <PageShell>
                 <div class="flex items-center justify-center min-h-screen">
-                    <Card class="w-[400px] px-10 pt-12 pb-10 flex flex-col gap-7">
+                    <form method="POST" action="/login" class="w-[400px] rounded-xl bg-[#16161E] border border-[#27272A] px-10 pt-12 pb-10 flex flex-col gap-7">
                         // Logo + subtitle
                         <div class="flex flex-col gap-2">
                             <h1 class="text-white text-2xl font-bold">"cocompute"</h1>
                             <p class="text-[#71717A] text-sm">"Sign in to your beta account"</p>
                         </div>
 
-                        <TextInput label="Email" r#type="email" placeholder="you@example.com"/>
-                        <TextInput label="Password" r#type="password" placeholder="••••••••"/>
+                        <TextInput label="Email" r#type="email" name="email" placeholder="you@example.com"/>
+                        <TextInput label="Password" r#type="password" name="password" placeholder="••••••••"/>
 
                         // Submit
                         <button
@@ -34,7 +33,7 @@ fn Login() -> impl IntoView {
                                 "Request a beta invite →"
                             </a>
                         </div>
-                    </Card>
+                    </form>
                 </div>
             </PageShell>
         </Base>
@@ -42,6 +41,5 @@ fn Login() -> impl IntoView {
 }
 
 pub async fn login() -> Html<String> {
-    let html = Login().into_view().to_html();
-    Html(format!("<!DOCTYPE html>{html}"))
+    super::render(Login())
 }
