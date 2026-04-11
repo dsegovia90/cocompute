@@ -6,3 +6,6 @@ target
 *.key
 .pi/
 context.md
+.zed
+node_modules
+orchestrator/static/output.css

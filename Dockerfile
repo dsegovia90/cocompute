@@ -1,3 +1,12 @@
+# Build Tailwind CSS
+FROM node:22-slim AS css
+WORKDIR /app/orchestrator
+COPY orchestrator/package.json orchestrator/package-lock.json ./
+RUN npm ci
+COPY orchestrator/input.css ./
+COPY orchestrator/src/ ./src/
+RUN mkdir -p static && npx @tailwindcss/cli -i ./input.css -o ./static/output.css --minify
+
 FROM rust:1.94-bookworm AS builder
 
 WORKDIR /app
@@ -47,6 +56,7 @@ RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/
 
 COPY --from=builder /app/target/release/cocompute_orchestrator /usr/local/bin/cocompute-orchestrator
 COPY --from=builder /opt/binaries/ /opt/binaries/
+COPY --from=css /app/orchestrator/static/ /static/
 
 # Data directory for SQLite and keys
 RUN mkdir -p /data /root/.cocompute
@@ -55,6 +65,7 @@ VOLUME /data
 ENV COCOMPUTE_DB_PATH=/data/cocompute.db
 ENV COCOMPUTE_KEY_PATH=/data/orchestrator.key
 ENV COCOMPUTE_PORT=3000
+ENV COCOMPUTE_STATIC_DIR=/static
 
 EXPOSE 3000
 

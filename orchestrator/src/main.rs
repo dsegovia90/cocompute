@@ -15,6 +15,7 @@ mod host_manager;
 mod openai;
 mod proxy;
 mod routes;
+mod web;
 
 #[derive(Parser, Debug)]
 #[command(name = "cocompute-orchestrator", version)]
@@ -26,6 +27,10 @@ struct Args {
     /// SQLite database path
     #[arg(long, default_value = "./cocompute.db", env = "COCOMPUTE_DB_PATH")]
     db_path: String,
+
+    /// Static files directory
+    #[arg(long, default_value = "orchestrator/static", env = "COCOMPUTE_STATIC_DIR")]
+    static_dir: String,
 
     #[command(subcommand)]
     command: Option<Command>,
@@ -113,7 +118,9 @@ async fn main() -> anyhow::Result<()> {
                 .route("/v1/chat/completions", post(routes::chat::create_chat_completion))
                 .route("/v1/stats", get(routes::stats::get_stats))
                 .route_layer(middleware::from_fn_with_state(db, auth::require_api_key))
-                // Unauthenticated routes (host discovery + updates)
+                // Web UI
+                .merge(web::router(&args.static_dir))
+                // Host discovery + updates
                 .route("/v1/node-info", get(routes::system::get_node_info))
                 .route("/v1/version", get(routes::system::get_version))
                 .route("/v1/update/{platform}", get(routes::system::get_update))
