@@ -3292,24 +3292,43 @@
                 },
                 {
                   "type": "frame",
-                  "id": "lSuhB",
-                  "name": "navBtn",
-                  "fill": "#6366F1",
-                  "cornerRadius": 8,
-                  "padding": [
-                    10,
-                    20
-                  ],
+                  "id": "CZGuj",
+                  "name": "navRight",
+                  "gap": 20,
+                  "alignItems": "center",
                   "children": [
                     {
                       "type": "text",
-                      "id": "MZKSA",
-                      "name": "navBtnTxt",
-                      "fill": "#FFFFFF",
-                      "content": "Request Beta Invite",
+                      "id": "4Dqts",
+                      "name": "loginLink",
+                      "fill": "#A1A1AA",
+                      "content": "Log in",
                       "fontFamily": "Inter",
                       "fontSize": 14,
-                      "fontWeight": "600"
+                      "fontWeight": "500"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "s7J1i",
+                      "name": "navBtn",
+                      "fill": "#6366F1",
+                      "cornerRadius": 8,
+                      "padding": [
+                        10,
+                        20
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "oT8Q3",
+                          "name": "betaBtnText",
+                          "fill": "#FFFFFF",
+                          "content": "Request Beta Invite",
+                          "fontFamily": "Inter",
+                          "fontSize": 14,
+                          "fontWeight": "600"
+                        }
+                      ]
                     }
                   ]
                 }
