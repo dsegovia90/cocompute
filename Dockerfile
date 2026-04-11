@@ -5,7 +5,8 @@ COPY orchestrator/package.json orchestrator/package-lock.json ./
 RUN npm ci
 COPY orchestrator/input.css ./
 COPY orchestrator/src/ ./src/
-RUN mkdir -p static && npx @tailwindcss/cli -i ./input.css -o ./static/output.css --minify
+COPY orchestrator/static/ ./static/
+RUN npx @tailwindcss/cli -i ./input.css -o ./static/output.css --minify
 
 FROM rust:1.94-bookworm AS builder
 
