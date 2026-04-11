@@ -13,7 +13,7 @@ fn Landing() -> impl IntoView {
                     <span class="text-white font-bold text-lg">"cocompute"</span>
                     <div class="flex items-center gap-5">
                         <a href="/login" class="text-[#A1A1AA] text-sm font-medium hover:text-white transition">"Log in"</a>
-                        <a href="/beta" class="rounded-lg bg-indigo-500 px-5 py-2.5 text-white text-sm font-semibold hover:bg-indigo-600 transition">
+                        <a href="/beta" class="hidden md:inline-block rounded-lg bg-indigo-500 px-5 py-2.5 text-white text-sm font-semibold hover:bg-indigo-600 transition">
                             "Request Beta Invite"
                         </a>
                     </div>

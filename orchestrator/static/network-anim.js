@@ -62,12 +62,12 @@ function buildLayout(){
 }
 
 function buildDesktop(){
-  var cw=Math.min(W*0.115,96);
-  var ch=Math.min(H*0.2,88);
-  var gpW=Math.min(W*0.155,138);
-  var gpH=Math.min(H*0.112,50);
-  var hubW=Math.min(W*0.13,115);
-  var hubH=Math.min(H*0.24,108);
+  var cw=Math.max(Math.min(W*0.115,96),80);
+  var ch=Math.max(Math.min(H*0.2,88),80);
+  var gpW=Math.max(Math.min(W*0.155,138),130);
+  var gpH=Math.max(Math.min(H*0.112,50),48);
+  var hubW=Math.max(Math.min(W*0.13,115),115);
+  var hubH=Math.max(Math.min(H*0.24,108),100);
   var my=H*0.5;
 
   cards.hub={x:W*0.5-hubW/2,y:my-hubH/2,w:hubW,h:hubH,cx:W*0.5,cy:my,rad:16,glow:0,gc:null};
@@ -101,9 +101,9 @@ function buildDesktop(){
 
 function buildMobile(){
   var cw=Math.min(W*0.22,80);
-  var ch=70;
-  var gpW=Math.min(W*0.26,100);
-  var gpH=44;
+  var ch=88;
+  var gpW=Math.min(W*0.36,130);
+  var gpH=56;
   var hubW=Math.min(W*0.32,115);
   var hubH=80;
 
@@ -120,15 +120,16 @@ function buildMobile(){
   var hubY=H*0.5-hubH/2;
   cards.hub={x:W*0.5-hubW/2,y:hubY,w:hubW,h:hubH,cx:W*0.5,cy:hubY+hubH/2,rad:16,glow:0,gc:null};
 
-  // GPUs row at bottom
-  var gpY=H*0.82;
-  var gpSpan=W*0.9;
+  // GPUs row at bottom — staggered: left/right higher, middle lower
+  var gpY=H*0.72;
+  var gpStagger=gpH*1.3;
+  var gpSpan=W*0.62;
   var gpStart=(W-gpSpan)/2;
-  // show fewer GPUs on mobile to avoid cramming
   var gpCount=Math.min(GP.length,3);
   for(var i=0;i<gpCount;i++){
     var xx=gpStart+gpSpan*i/(gpCount-1)-gpW/2;
-    cards[GP[i].id]={x:xx,y:gpY,w:gpW,h:gpH,cx:xx+gpW/2,cy:gpY+gpH/2,rad:12,glow:0,gc:null};
+    var yy=gpY+(i===1?gpStagger:0);
+    cards[GP[i].id]={x:xx,y:yy,w:gpW,h:gpH,cx:xx+gpW/2,cy:yy+gpH/2,rad:12,glow:0,gc:null};
   }
 
   // vertical bezier paths: clients -> hub (top to middle)
