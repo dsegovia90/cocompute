@@ -1,3 +1,4 @@
+pub mod asset_hash;
 mod beta;
 mod components;
 mod landing;
