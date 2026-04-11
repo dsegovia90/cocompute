@@ -1,6 +1,6 @@
+use super::components::*;
 use axum::response::Html;
 use leptos::prelude::*;
-use super::components::*;
 
 #[component]
 fn Landing() -> impl IntoView {
@@ -60,7 +60,7 @@ fn Landing() -> impl IntoView {
                             // Host GPU
                             <div class="flex flex-col items-center gap-2 rounded-xl bg-[#16161E] border border-[#27272A] px-6 py-5 w-28">
                                 <Icon name="cpu" class="w-7 h-7 text-emerald-500"/>
-                                <span class="text-white text-sm font-semibold">"Host GPU"</span>
+                                <span class="text-white text-sm text-center font-semibold">"Host GPU"</span>
                             </div>
                         </div>
                         <p class="text-[#3F3F46] font-mono text-[11px]">"← response ←"</p>
