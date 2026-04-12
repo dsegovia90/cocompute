@@ -1,6 +1,13 @@
-use axum::response::Html;
+use axum::{extract::Query, response::Html};
 use leptos::prelude::*;
+use serde::Deserialize;
 use super::components::*;
+
+#[derive(Deserialize)]
+pub struct BetaQuery {
+    pub error: Option<String>,
+    pub success: Option<bool>,
+}
 
 #[component]
 fn RoleOption(
@@ -26,7 +33,7 @@ fn RoleOption(
 }
 
 #[component]
-fn BetaInvite() -> impl IntoView {
+fn BetaInvite(error: Option<String>) -> impl IntoView {
     view! {
         <Base title="cocompute — beta invite">
             <PageShell>
@@ -39,6 +46,10 @@ fn BetaInvite() -> impl IntoView {
                             <p class="text-[#A1A1AA] text-base font-medium">"Request Beta Access"</p>
                             <p class="text-[#52525B] text-[13px]">"We're launching invite-only. Tell us about yourself."</p>
                         </div>
+
+                        {error.map(|msg| view! {
+                            <div class="rounded-lg bg-red-500/10 border border-red-500/20 px-4 py-3 text-red-400 text-sm">{msg}</div>
+                        })}
 
                         <TextInput label="Email" r#type="email" name="email" required=true placeholder="you@example.com"/>
 
@@ -81,6 +92,27 @@ fn BetaInvite() -> impl IntoView {
     }
 }
 
-pub async fn beta() -> Html<String> {
-    super::render(BetaInvite())
+#[component]
+fn BetaConfirmation() -> impl IntoView {
+    view! {
+        <Base title="cocompute — you're on the list">
+            <PageShell>
+                <div class="flex items-center justify-center min-h-screen">
+                    <div class="w-[400px] rounded-xl bg-[#16161E] border border-[#27272A] px-10 pt-12 pb-10 flex flex-col gap-5 items-center text-center">
+                        <h1 class="text-white text-2xl font-bold">"You're on the list!"</h1>
+                        <p class="text-[#71717A] text-sm">"Thanks for signing up. We'll reach out when a spot opens up."</p>
+                        <a href="/" class="text-indigo-500 text-sm font-medium hover:underline">"Back to home"</a>
+                    </div>
+                </div>
+            </PageShell>
+        </Base>
+    }
+}
+
+pub async fn beta(Query(params): Query<BetaQuery>) -> Html<String> {
+    if params.success.unwrap_or(false) {
+        super::render(BetaConfirmation())
+    } else {
+        super::render(BetaInvite(BetaInviteProps { error: params.error }))
+    }
 }

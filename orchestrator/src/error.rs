@@ -52,3 +52,40 @@ impl From<anyhow::Error> for AppError {
         AppError::Internal(e)
     }
 }
+
+/// Error type for web (HTML) routes — redirects or re-renders pages with error messages.
+#[derive(Debug)]
+pub enum WebError {
+    /// 303 redirect (e.g., after login failure, redirect to /login?error=...)
+    Redirect(String),
+    /// Render an error on the current page
+    Form { message: String, status: StatusCode },
+    /// Internal error
+    Internal(anyhow::Error),
+}
+
+impl IntoResponse for WebError {
+    fn into_response(self) -> Response {
+        match self {
+            WebError::Redirect(url) => axum::response::Redirect::to(&url).into_response(),
+            WebError::Form { message, status } => {
+                (status, axum::response::Html(format!(
+                    r#"<!DOCTYPE html><html><body><h1>Error</h1><p>{}</p></body></html>"#,
+                    message
+                ))).into_response()
+            }
+            WebError::Internal(e) => {
+                tracing::error!("web internal error: {e:?}");
+                (StatusCode::INTERNAL_SERVER_ERROR, axum::response::Html(
+                    "<!DOCTYPE html><html><body><h1>Internal Server Error</h1></body></html>".to_string()
+                )).into_response()
+            }
+        }
+    }
+}
+
+impl From<anyhow::Error> for WebError {
+    fn from(e: anyhow::Error) -> Self {
+        WebError::Internal(e)
+    }
+}

@@ -1,9 +1,15 @@
-use axum::response::Html;
+use axum::{extract::Query, response::Html};
 use leptos::prelude::*;
+use serde::Deserialize;
 use super::components::*;
 
+#[derive(Deserialize)]
+pub struct LoginQuery {
+    pub error: Option<String>,
+}
+
 #[component]
-fn Login() -> impl IntoView {
+fn Login(error: Option<String>) -> impl IntoView {
     view! {
         <Base title="cocompute — sign in">
             <PageShell>
@@ -14,6 +20,10 @@ fn Login() -> impl IntoView {
                             <h1 class="text-white text-2xl font-bold">"cocompute"</h1>
                             <p class="text-[#71717A] text-sm">"Sign in to your beta account"</p>
                         </div>
+
+                        {error.map(|msg| view! {
+                            <div class="rounded-lg bg-red-500/10 border border-red-500/20 px-4 py-3 text-red-400 text-sm">{msg}</div>
+                        })}
 
                         <TextInput label="Email" r#type="email" name="email" placeholder="you@example.com"/>
                         <TextInput label="Password" r#type="password" name="password" placeholder="••••••••"/>
@@ -26,12 +36,15 @@ fn Login() -> impl IntoView {
                             "Sign In"
                         </button>
 
-                        // Beta link
-                        <div class="flex justify-center gap-1">
-                            <span class="text-[#71717A] text-[13px]">"Want early access?"</span>
-                            <a href="/beta" class="text-indigo-500 text-[13px] font-medium hover:underline">
-                                "Request a beta invite →"
-                            </a>
+                        // Forgot + Beta links
+                        <div class="flex flex-col items-center gap-2">
+                            <a href="/forgot" class="text-[#71717A] text-[13px] hover:text-white transition">"Forgot password?"</a>
+                            <div class="flex gap-1">
+                                <span class="text-[#71717A] text-[13px]">"Want early access?"</span>
+                                <a href="/beta" class="text-indigo-500 text-[13px] font-medium hover:underline">
+                                    "Request a beta invite →"
+                                </a>
+                            </div>
                         </div>
                     </form>
                 </div>
@@ -40,6 +53,6 @@ fn Login() -> impl IntoView {
     }
 }
 
-pub async fn login() -> Html<String> {
-    super::render(Login())
+pub async fn login(Query(params): Query<LoginQuery>) -> Html<String> {
+    super::render(Login(LoginProps { error: params.error }))
 }

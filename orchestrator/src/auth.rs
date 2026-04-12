@@ -1,17 +1,27 @@
 use axum::{
-    extract::{Request, State},
-    http::header::AUTHORIZATION,
+    extract::{FromRequestParts, Request, State},
+    http::{header::AUTHORIZATION, request::Parts},
     middleware::Next,
     response::Response,
 };
+use axum_extra::extract::cookie::{Cookie, SignedCookieJar};
 
 /// The authenticated API key's database ID, inserted into request extensions by the auth middleware.
 #[derive(Clone, Copy, Debug)]
 pub struct ApiKeyId(pub i32);
+
+/// The authenticated web user, extracted from a signed session cookie.
+#[derive(Clone, Debug)]
+pub struct CurrentUser(pub crate::db::entities::users::Model);
+
+use argon2::{
+    Argon2, PasswordHash, PasswordHasher, PasswordVerifier,
+    password_hash::{SaltString, rand_core::OsRng},
+};
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 use sha2::{Digest, Sha256};
 
-use crate::db::entities::api_keys;
+use crate::db::entities::{api_keys, users};
 use crate::error::AppError;
 
 /// Hash an API key using SHA-256.
@@ -62,6 +72,81 @@ pub async fn require_api_key(
     request.extensions_mut().insert(ApiKeyId(api_key.id));
 
     Ok(next.run(request).await)
+}
+
+pub const SESSION_COOKIE: &str = "__session";
+pub const SESSION_MAX_AGE_DAYS: i64 = 30;
+
+/// Create a signed session cookie for a user pid.
+pub fn make_session_cookie(pid: &str) -> Cookie<'static> {
+    Cookie::build((SESSION_COOKIE.to_string(), pid.to_string()))
+        .path("/")
+        .http_only(true)
+        .same_site(axum_extra::extract::cookie::SameSite::Lax)
+        .max_age(time::Duration::days(SESSION_MAX_AGE_DAYS))
+        .build()
+}
+
+/// Create a cookie that clears the session.
+pub fn clear_session_cookie() -> Cookie<'static> {
+    Cookie::build((SESSION_COOKIE.to_string(), String::new()))
+        .path("/")
+        .http_only(true)
+        .max_age(time::Duration::ZERO)
+        .build()
+}
+
+impl FromRequestParts<crate::AppState> for CurrentUser {
+    type Rejection = axum::response::Redirect;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &crate::AppState,
+    ) -> Result<Self, Self::Rejection> {
+        let jar = SignedCookieJar::from_headers(&parts.headers, state.session_key.clone());
+
+        let pid = jar
+            .get(SESSION_COOKIE)
+            .map(|c| c.value().to_string())
+            .ok_or_else(|| axum::response::Redirect::to("/login"))?;
+
+        let user = users::Entity::find()
+            .filter(users::Column::Pid.eq(&pid))
+            .filter(users::Column::EmailVerifiedAt.is_not_null())
+            .one(&state.db)
+            .await
+            .map_err(|_| axum::response::Redirect::to("/login"))?
+            .ok_or_else(|| axum::response::Redirect::to("/login"))?;
+
+        Ok(CurrentUser(user))
+    }
+}
+
+/// Hash a password using argon2id. Runs on a blocking thread.
+pub async fn hash_password(password: String) -> anyhow::Result<String> {
+    tokio::task::spawn_blocking(move || {
+        let salt = SaltString::generate(&mut OsRng);
+        let hash = Argon2::default()
+            .hash_password(password.as_bytes(), &salt)
+            .map_err(|e| anyhow::anyhow!("hash error: {e}"))?;
+        Ok(hash.to_string())
+    })
+    .await?
+}
+
+/// Verify a password against an argon2id hash. Runs on a blocking thread.
+pub async fn verify_password(password: String, hash: String) -> bool {
+    tokio::task::spawn_blocking(move || {
+        PasswordHash::new(&hash)
+            .ok()
+            .map_or(false, |parsed| {
+                Argon2::default()
+                    .verify_password(password.as_bytes(), &parsed)
+                    .is_ok()
+            })
+    })
+    .await
+    .unwrap_or(false)
 }
 
 #[cfg(test)]

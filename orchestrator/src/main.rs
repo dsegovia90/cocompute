@@ -9,6 +9,7 @@ use sea_orm_migration::MigratorTrait;
 
 mod auth;
 mod db;
+mod email;
 mod error;
 mod host_acceptor;
 mod host_manager;
@@ -32,6 +33,34 @@ struct Args {
     #[arg(long, default_value = "orchestrator/static", env = "COCOMPUTE_STATIC_DIR")]
     static_dir: String,
 
+    /// Session signing secret (32+ random bytes, hex or base64)
+    #[arg(long, env = "COCOMPUTE_SESSION_SECRET", default_value = "dev-insecure-session-secret-change-me-this-must-be-at-least-64-bytes-long-ok")]
+    session_secret: String,
+
+    /// Public base URL (for email links)
+    #[arg(long, env = "COCOMPUTE_BASE_URL", default_value = "http://localhost:3000")]
+    base_url: String,
+
+    /// SMTP host (email disabled if not set)
+    #[arg(long, env = "SMTP_HOST")]
+    smtp_host: Option<String>,
+
+    /// SMTP port
+    #[arg(long, env = "SMTP_PORT", default_value = "587")]
+    smtp_port: u16,
+
+    /// SMTP username
+    #[arg(long, env = "SMTP_USER")]
+    smtp_user: Option<String>,
+
+    /// SMTP password
+    #[arg(long, env = "SMTP_PASSWORD")]
+    smtp_password: Option<String>,
+
+    /// SMTP from address
+    #[arg(long, env = "SMTP_FROM")]
+    smtp_from: Option<String>,
+
     #[command(subcommand)]
     command: Option<Command>,
 }
@@ -42,6 +71,13 @@ enum Command {
     GenerateKey,
     /// Start the orchestrator server (default)
     Serve,
+    /// Invite a beta user — creates a user record and sends a verification email
+    InviteUser {
+        #[arg(long)]
+        email: String,
+        #[arg(long)]
+        name: String,
+    },
 }
 
 #[derive(Clone)]
@@ -50,6 +86,15 @@ pub(crate) struct AppState {
     pub(crate) endpoint_id: String,
     pub(crate) db: DatabaseConnection,
     pub(crate) hosts: HostManager,
+    pub(crate) mailer: Option<std::sync::Arc<email::Mailer>>,
+    pub(crate) session_key: axum_extra::extract::cookie::Key,
+    pub(crate) base_url: String,
+}
+
+impl axum::extract::FromRef<AppState> for axum_extra::extract::cookie::Key {
+    fn from_ref(state: &AppState) -> Self {
+        state.session_key.clone()
+    }
 }
 
 #[tokio::main]
@@ -70,6 +115,35 @@ async fn main() -> anyhow::Result<()> {
     let db = Database::connect(&db_url).await?;
     db::migration::Migrator::up(&db, None).await?;
 
+    // Build mailer (None if SMTP not configured)
+    let mailer = match &args.smtp_host {
+        Some(host) => {
+            let from = args.smtp_from.as_deref().unwrap_or("noreply@cocompute.ai");
+            match email::Mailer::new(
+                host,
+                args.smtp_port,
+                args.smtp_user.as_deref(),
+                args.smtp_password.as_deref(),
+                from,
+            ) {
+                Ok(m) => {
+                    tracing::info!("mailer configured via {host}:{}", args.smtp_port);
+                    Some(std::sync::Arc::new(m))
+                }
+                Err(e) => {
+                    tracing::warn!("failed to configure mailer: {e}");
+                    None
+                }
+            }
+        }
+        None => {
+            tracing::warn!("SMTP_HOST not set — email sending disabled");
+            None
+        }
+    };
+
+    let session_key = axum_extra::extract::cookie::Key::from(args.session_secret.as_bytes());
+
     match args.command.unwrap_or(Command::Serve) {
         Command::GenerateKey => {
             let key = auth::generate_api_key();
@@ -84,6 +158,50 @@ async fn main() -> anyhow::Result<()> {
 
             println!("API key generated (save this — it won't be shown again):");
             println!("{key}");
+            Ok(())
+        }
+        Command::InviteUser { email, name } => {
+            use db::entities::users;
+            use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
+
+            // Check if already invited
+            let existing = users::Entity::find()
+                .filter(users::Column::Email.eq(&email))
+                .one(&db)
+                .await?;
+            if existing.is_some() {
+                anyhow::bail!("user with email {email} already exists");
+            }
+
+            let pid = uuid::Uuid::new_v4().to_string();
+            let token = auth::generate_api_key(); // 64-char hex token
+            let throwaway_password = auth::hash_password(auth::generate_api_key()).await?;
+
+            let user = users::ActiveModel {
+                pid: Set(pid),
+                email: Set(email.clone()),
+                password_hash: Set(throwaway_password),
+                name: Set(name.clone()),
+                email_verification_token: Set(Some(token.clone())),
+                email_verification_sent_at: Set(Some(chrono::Utc::now())),
+                created_at: Set(chrono::Utc::now()),
+                updated_at: Set(chrono::Utc::now()),
+                ..Default::default()
+            };
+            user.insert(&db).await?;
+
+            let verify_url = format!("{}/verify?token={}", args.base_url, token);
+            println!("User created for {email}");
+            println!("Verification URL: {verify_url}");
+
+            if let Some(ref mailer) = mailer {
+                let parts = email::templates::invite_email(&name, &token, &args.base_url);
+                mailer.send(&email, &parts.subject, &parts.html, &parts.text).await?;
+                println!("Invite email sent.");
+            } else {
+                println!("Mailer not configured — share the verification URL manually.");
+            }
+
             Ok(())
         }
         Command::Serve => {
@@ -109,6 +227,9 @@ async fn main() -> anyhow::Result<()> {
                 endpoint_id,
                 db: db.clone(),
                 hosts,
+                mailer,
+                session_key,
+                base_url: args.base_url,
             };
 
             let app = Router::new()

@@ -105,25 +105,28 @@ function buildMobile(){
   var gpW=Math.min(W*0.36,130);
   var gpH=56;
   var hubW=Math.min(W*0.32,115);
-  var hubH=80;
+  var hubH=100;
 
   // clients row at top
-  var clY=H*0.06;
-  var clSpan=W*0.8;
+  var clY=H*0.05;
+  var clSpan=W*0.68;
   var clStart=(W-clSpan)/2;
   for(var i=0;i<CL.length;i++){
     var xx=clStart+clSpan*i/(CL.length-1)-cw/2;
     cards[CL[i].id]={x:xx,y:clY,w:cw,h:ch,cx:xx+cw/2,cy:clY+ch/2,rad:14,glow:0,gc:null};
   }
 
-  // orchestrator in middle
-  var hubY=H*0.5-hubH/2;
+  // Equal gap between clients→hub and hub→GPUs
+  var clientsBottom=clY+ch;
+  var bottomPad=20; // margin at very bottom of canvas
+  var gap=(H-clientsBottom-hubH-gpH-gpH*1.2-bottomPad)/3;
+  var hubY=clientsBottom+gap;
   cards.hub={x:W*0.5-hubW/2,y:hubY,w:hubW,h:hubH,cx:W*0.5,cy:hubY+hubH/2,rad:16,glow:0,gc:null};
 
   // GPUs row at bottom — staggered: left/right higher, middle lower
-  var gpY=H*0.72;
-  var gpStagger=gpH*1.3;
-  var gpSpan=W*0.62;
+  var gpY=hubY+hubH+gap;
+  var gpStagger=gpH*1.2;
+  var gpSpan=W-gpW-40;
   var gpStart=(W-gpSpan)/2;
   var gpCount=Math.min(GP.length,3);
   for(var i=0;i<gpCount;i++){
