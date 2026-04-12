@@ -45,23 +45,20 @@ Set Your Password
     }
 }
 
-pub fn welcome_email(name: &str, api_key: &str) -> EmailParts {
+pub fn welcome_email(name: &str) -> EmailParts {
     EmailParts {
-        subject: "Welcome to cocompute — here's your API key".to_string(),
+        subject: "Welcome to cocompute".to_string(),
         html: format!(
             r#"<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px">
 <h2 style="color:#fff;margin:0 0 16px">You're all set, {name}!</h2>
 <p style="color:#a1a1aa;line-height:1.6">
-Your cocompute account is verified. Here's your API key:
+Your cocompute account is verified and ready to go. Sign in anytime to get started.
 </p>
-<div style="background:#1a1a2e;border:1px solid #27272a;border-radius:8px;padding:16px;margin:16px 0;font-family:monospace;color:#67e8f9;word-break:break-all">
-{api_key}
-</div>
-<p style="color:#71717a;font-size:13px">Keep this key safe — it won't be shown again.</p>
+<p style="color:#71717a;font-size:13px;margin-top:24px">— the cocompute team</p>
 </div>"#
         ),
         text: format!(
-            "You're all set, {name}!\n\nYour cocompute account is verified. Here's your API key:\n\n{api_key}\n\nKeep this key safe — it won't be shown again.\n\n— the cocompute team"
+            "You're all set, {name}!\n\nYour cocompute account is verified and ready to go. Sign in anytime to get started.\n\n— the cocompute team"
         ),
     }
 }

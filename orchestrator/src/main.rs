@@ -33,9 +33,9 @@ struct Args {
     #[arg(long, default_value = "orchestrator/static", env = "COCOMPUTE_STATIC_DIR")]
     static_dir: String,
 
-    /// Session signing secret (32+ random bytes, hex or base64)
-    #[arg(long, env = "COCOMPUTE_SESSION_SECRET", default_value = "dev-insecure-session-secret-change-me-this-must-be-at-least-64-bytes-long-ok")]
-    session_secret: String,
+    /// Session signing secret (64+ bytes). Generated randomly if not set (sessions won't survive restarts).
+    #[arg(long, env = "COCOMPUTE_SESSION_SECRET")]
+    session_secret: Option<String>,
 
     /// Public base URL (for email links)
     #[arg(long, env = "COCOMPUTE_BASE_URL", default_value = "http://localhost:3000")]
@@ -142,7 +142,13 @@ async fn main() -> anyhow::Result<()> {
         }
     };
 
-    let session_key = axum_extra::extract::cookie::Key::from(args.session_secret.as_bytes());
+    let session_key = match &args.session_secret {
+        Some(secret) => axum_extra::extract::cookie::Key::from(secret.as_bytes()),
+        None => {
+            tracing::warn!("COCOMPUTE_SESSION_SECRET not set — using ephemeral key (sessions won't survive restarts)");
+            axum_extra::extract::cookie::Key::generate()
+        }
+    };
 
     match args.command.unwrap_or(Command::Serve) {
         Command::GenerateKey => {

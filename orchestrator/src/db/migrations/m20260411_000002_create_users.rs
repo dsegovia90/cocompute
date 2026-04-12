@@ -16,7 +16,6 @@ enum Users {
     Email,
     PasswordHash,
     Name,
-    ApiKey,
     EmailVerificationToken,
     EmailVerificationSentAt,
     EmailVerifiedAt,
@@ -39,7 +38,6 @@ impl MigrationTrait for M20260411CreateUsers {
                     .col(ColumnDef::new(Users::Email).string().not_null().unique_key())
                     .col(ColumnDef::new(Users::PasswordHash).string().not_null())
                     .col(ColumnDef::new(Users::Name).string().not_null())
-                    .col(ColumnDef::new(Users::ApiKey).string().null().unique_key())
                     .col(ColumnDef::new(Users::EmailVerificationToken).string().null())
                     .col(ColumnDef::new(Users::EmailVerificationSentAt).timestamp().null())
                     .col(ColumnDef::new(Users::EmailVerifiedAt).timestamp().null())
