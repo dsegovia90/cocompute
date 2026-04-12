@@ -40,15 +40,15 @@ impl iroh::protocol::ProtocolHandler for HostAcceptor {
                 .await
                 .map_err(|e| std::io::Error::other(format!("failed to read registry: {e}")))?;
 
-            let capabilities = match request {
+            let (capabilities, setup_token) = match request {
                 Request::Registry(reg_req) => {
                     match reg_req {
-                        common::protocols::registry::RegistryRequest::Register(caps) => {
+                        common::protocols::registry::RegistryRequest::Register { capabilities, setup_token } => {
                             tracing::info!(
                                 "host {endpoint_id} registered with {} models",
-                                caps.models.len()
+                                capabilities.models.len()
                             );
-                            caps
+                            (capabilities, setup_token)
                         }
                         _ => {
                             return Err(std::io::Error::other(
@@ -63,6 +63,7 @@ impl iroh::protocol::ProtocolHandler for HostAcceptor {
                     ).into());
                 }
             };
+            let _ = setup_token; // TODO: validate token and assign pools
 
             // Send ack
             let response = Response::Registry(RegistryResponse::Ack);
@@ -71,7 +72,7 @@ impl iroh::protocol::ProtocolHandler for HostAcceptor {
                 .map_err(|e| std::io::Error::other(format!("failed to send ack: {e}")))?;
 
             // Store the connection in the HostManager
-            hosts.register(endpoint_id.clone(), capabilities, connection.clone()).await;
+            hosts.register(endpoint_id.clone(), capabilities, connection.clone(), vec![], None).await;
 
             // Handle subsequent streams from the host (heartbeats)
             loop {
@@ -94,9 +95,9 @@ impl iroh::protocol::ProtocolHandler for HostAcceptor {
                                     break;
                                 }
                             }
-                            Request::Registry(common::protocols::registry::RegistryRequest::Register(caps)) => {
-                                tracing::info!("host {endpoint_id} re-registered with {} models", caps.models.len());
-                                hosts.register(endpoint_id.clone(), caps, connection.clone()).await;
+                            Request::Registry(common::protocols::registry::RegistryRequest::Register { capabilities, .. }) => {
+                                tracing::info!("host {endpoint_id} re-registered with {} models", capabilities.models.len());
+                                hosts.register(endpoint_id.clone(), capabilities, connection.clone(), vec![], None).await;
                                 let resp = Response::Registry(RegistryResponse::Ack);
                                 if let Err(e) = write_p2p(send, resp).await {
                                     tracing::warn!("re-register ack failed for {endpoint_id}: {e}");

@@ -7,7 +7,7 @@ use common::{
 
 use crate::{
     AppState,
-    auth::ApiKeyId,
+    auth::{ApiKeyId, PoolContext},
     error::AppError,
     openai::{
         OpenAIChatChoice, OpenAIChatMessage, OpenAIChatRequest, OpenAIChatResponse,
@@ -22,6 +22,7 @@ use crate::{
 pub(crate) async fn create_chat_completion(
     State(state): State<AppState>,
     Extension(api_key_id): Extension<ApiKeyId>,
+    Extension(pool_ctx): Extension<PoolContext>,
     Json(payload): Json<OpenAIChatRequest>,
 ) -> Result<axum::response::Response, AppError> {
     let model = payload.model.clone();
@@ -42,9 +43,9 @@ pub(crate) async fn create_chat_completion(
     };
 
     if stream {
-        create_chat_completion_stream(state, model, internal_request, api_key_id.0).await
+        create_chat_completion_stream(state, model, internal_request, api_key_id.0, pool_ctx.0).await
     } else {
-        create_chat_completion_sync(state, model, internal_request, api_key_id.0).await
+        create_chat_completion_sync(state, model, internal_request, api_key_id.0, pool_ctx.0).await
     }
 }
 
@@ -53,10 +54,11 @@ pub(crate) async fn create_chat_completion_sync(
     model: String,
     internal_request: common::protocols::chat::ChatRequest,
     api_key_id: i32,
+    pool_id: Option<i32>,
 ) -> Result<axum::response::Response, AppError> {
     let request = Request::Chat(internal_request);
     let start = std::time::Instant::now();
-    let (response, host_id, iroh_rtt) = route_to_host(&state, &model, request).await?;
+    let (response, host_id, iroh_rtt) = route_to_host(&state, &model, request, pool_id).await?;
     let total_ms = start.elapsed().as_millis() as i64;
 
     match response {
@@ -68,6 +70,7 @@ pub(crate) async fn create_chat_completion_sync(
                 "chat".into(),
                 metering,
                 Some(api_key_id),
+                pool_id,
                 Some(total_ms),
                 iroh_rtt,
             );
@@ -131,12 +134,13 @@ pub(crate) async fn create_chat_completion_stream(
     model: String,
     internal_request: common::protocols::chat::ChatRequest,
     api_key_id: i32,
+    pool_id: Option<i32>,
 ) -> Result<axum::response::Response, AppError> {
     let request = Request::Chat(internal_request);
     let start = std::time::Instant::now();
 
     // Find host and open a bi-stream
-    let host = state.hosts.find_host_for_model(&model).await;
+    let host = state.hosts.find_host_for_model(&model, pool_id).await;
     let host = match host {
         Some(h) => h,
         None => {
@@ -273,7 +277,7 @@ pub(crate) async fn create_chat_completion_stream(
                 Ok(Some(ChatStreamFrame::Done(metering))) => {
                     let total_ms = start.elapsed().as_millis() as i64;
                     let iroh_rtt = connection_rtt_ms(&conn);
-                    log_metering(db.clone(), host_id.clone(), model_clone.clone(), "chat_stream".into(), &metering, Some(api_key_id), Some(total_ms), iroh_rtt);
+                    log_metering(db.clone(), host_id.clone(), model_clone.clone(), "chat_stream".into(), &metering, Some(api_key_id), pool_id, Some(total_ms), iroh_rtt);
 
                     // Final chunk with finish_reason
                     yield Ok(Event::default().data(serde_json::to_string(&OpenAIChatStreamChunk {

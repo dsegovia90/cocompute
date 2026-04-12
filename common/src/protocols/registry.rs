@@ -17,8 +17,11 @@ pub struct ModelInfo {
 
 #[derive(Debug, Encode, Decode)]
 pub enum RegistryRequest {
-    /// Host registers with its capabilities.
-    Register(Capabilities),
+    /// Host registers with its capabilities and optional setup token.
+    Register {
+        capabilities: Capabilities,
+        setup_token: Option<String>,
+    },
     /// Heartbeat — host is still alive.
     Heartbeat,
 }

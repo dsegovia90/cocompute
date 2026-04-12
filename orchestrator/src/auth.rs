@@ -14,6 +14,10 @@ pub struct ApiKeyId(pub i32);
 #[derive(Clone, Debug)]
 pub struct CurrentUser(pub crate::db::entities::users::Model);
 
+/// Pool context from the API key, inserted into request extensions.
+#[derive(Clone, Copy, Debug)]
+pub struct PoolContext(pub Option<i32>);
+
 use argon2::{
     Argon2, PasswordHash, PasswordHasher, PasswordVerifier,
     password_hash::{SaltString, rand_core::OsRng},
@@ -70,6 +74,7 @@ pub async fn require_api_key(
 
     let mut request = request;
     request.extensions_mut().insert(ApiKeyId(api_key.id));
+    request.extensions_mut().insert(PoolContext(api_key.pool_id));
 
     Ok(next.run(request).await)
 }

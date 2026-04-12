@@ -1,16 +1,18 @@
 use sea_orm::entity::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
-#[sea_orm(table_name = "hosts")]
+#[sea_orm(table_name = "host_tokens")]
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i32,
     #[sea_orm(unique)]
-    pub endpoint_id: String,
-    pub capabilities: Option<Json>,
-    pub status: String,
-    pub last_seen: Option<DateTimeUtc>,
-    pub user_id: Option<i32>,
+    pub token_hash: String,
+    pub user_id: i32,
+    pub pool_id: i32,
+    pub used_at: Option<DateTimeUtc>,
+    pub host_endpoint_id: Option<String>,
+    pub created_at: DateTimeUtc,
+    pub expires_at: DateTimeUtc,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

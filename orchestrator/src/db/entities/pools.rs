@@ -1,16 +1,16 @@
 use sea_orm::entity::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
-#[sea_orm(table_name = "hosts")]
+#[sea_orm(table_name = "pools")]
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i32,
     #[sea_orm(unique)]
-    pub endpoint_id: String,
-    pub capabilities: Option<Json>,
-    pub status: String,
-    pub last_seen: Option<DateTimeUtc>,
-    pub user_id: Option<i32>,
+    pub pid: String,
+    pub name: String,
+    pub owner_id: i32,
+    pub is_global: bool,
+    pub created_at: DateTimeUtc,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

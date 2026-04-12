@@ -36,14 +36,15 @@ pub(crate) async fn send_to_host(
     Ok(response)
 }
 
-/// Route a request to the appropriate host based on model name.
+/// Route a request to the appropriate host based on model name, optionally filtered by pool.
 /// Returns (response, endpoint_id, iroh_rtt_ms).
 pub(crate) async fn route_to_host(
     state: &AppState,
     model: &str,
     request: Request,
+    pool_id: Option<i32>,
 ) -> Result<(Response, String, Option<f64>), AppError> {
-    let host = state.hosts.find_host_for_model(model).await;
+    let host = state.hosts.find_host_for_model(model, pool_id).await;
 
     match host {
         Some(h) => {
@@ -71,6 +72,7 @@ pub(crate) fn log_metering(
     request_type: String,
     metering: &Metering,
     api_key_id: Option<i32>,
+    pool_id: Option<i32>,
     total_ms: Option<i64>,
     iroh_rtt_ms: Option<f64>,
 ) {
@@ -87,6 +89,7 @@ pub(crate) fn log_metering(
             iroh_rtt_ms: Set(iroh_rtt_ms),
             created_at: Set(chrono::Utc::now()),
             api_key_id: Set(api_key_id),
+            pool_id: Set(pool_id),
             ..Default::default()
         };
         if let Err(e) = record.insert(&db).await {

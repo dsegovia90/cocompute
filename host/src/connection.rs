@@ -81,7 +81,10 @@ pub(crate) async fn connect_and_serve(
         .map(|m| m.name.clone())
         .collect();
     initial_models.sort();
-    let reg_request = Request::Registry(RegistryRequest::Register(capabilities));
+    let reg_request = Request::Registry(RegistryRequest::Register {
+        capabilities,
+        setup_token: None, // TODO: pass setup token from CLI args
+    });
 
     let (send, recv) = conn.open_bi().await?;
     write_p2p(send, reg_request).await?;
@@ -130,7 +133,10 @@ pub(crate) async fn connect_and_serve(
                             "model list changed, re-registering with orchestrator"
                         );
                         last_models = new_models;
-                        Request::Registry(RegistryRequest::Register(new_caps))
+                        Request::Registry(RegistryRequest::Register {
+                            capabilities: new_caps,
+                            setup_token: None,
+                        })
                     } else {
                         Request::Registry(RegistryRequest::Heartbeat)
                     }

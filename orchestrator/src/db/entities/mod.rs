@@ -1,5 +1,9 @@
 pub mod api_keys;
 pub mod beta_invites;
+pub mod host_pool_memberships;
+pub mod host_tokens;
 pub mod hosts;
 pub mod metering_logs;
+pub mod pool_members;
+pub mod pools;
 pub mod users;

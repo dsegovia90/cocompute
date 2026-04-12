@@ -16,6 +16,8 @@ pub struct ConnectedHost {
     pub endpoint_id: String,
     pub capabilities: Capabilities,
     pub connection: Connection,
+    pub pool_ids: Vec<i32>,
+    pub user_id: Option<i32>,
 }
 
 impl ConnectedHost {
@@ -41,17 +43,21 @@ impl HostManager {
         }
     }
 
-    /// Register a host with its capabilities and connection.
+    /// Register a host with its capabilities, connection, and pool memberships.
     pub async fn register(
         &self,
         endpoint_id: String,
         capabilities: Capabilities,
         connection: Connection,
+        pool_ids: Vec<i32>,
+        user_id: Option<i32>,
     ) {
         let host = ConnectedHost {
             endpoint_id: endpoint_id.clone(),
             capabilities,
             connection,
+            pool_ids,
+            user_id,
         };
         self.hosts.write().await.insert(endpoint_id.clone(), host);
         tracing::info!("host registered: {endpoint_id}");
@@ -63,12 +69,16 @@ impl HostManager {
         tracing::info!("host unregistered: {endpoint_id}");
     }
 
-    /// Find a host that has the requested model, rotating across matching hosts.
-    pub async fn find_host_for_model(&self, model_name: &str) -> Option<ConnectedHost> {
+    /// Find a host that has the requested model, optionally filtered by pool.
+    pub async fn find_host_for_model(&self, model_name: &str, pool_id: Option<i32>) -> Option<ConnectedHost> {
         let hosts = self.hosts.read().await;
         let matching: Vec<&ConnectedHost> = hosts
             .values()
             .filter(|h| h.has_model(model_name))
+            .filter(|h| match pool_id {
+                Some(pid) => h.pool_ids.contains(&pid),
+                None => true,
+            })
             .collect();
 
         if matching.is_empty() {
@@ -167,11 +177,15 @@ mod tests {
             "host-1".into(),
             test_capabilities(vec!["llama3:latest", "mxbai-embed-large:latest"]),
             conn1,
+            vec![],
+            None,
         ).await;
         mgr.register(
             "host-2".into(),
             test_capabilities(vec!["llama3:latest"]),
             conn2,
+            vec![],
+            None,
         ).await;
 
         // Both models available
@@ -181,18 +195,18 @@ mod tests {
         assert_eq!(models, vec!["llama3:latest", "mxbai-embed-large:latest"]);
 
         // Both hosts can serve llama3
-        assert!(mgr.find_host_for_model("llama3:latest").await.is_some());
+        assert!(mgr.find_host_for_model("llama3:latest", None).await.is_some());
 
         // Host 2 disconnects
         mgr.unregister("host-2").await;
 
         // llama3 still available via host-1
-        let host = mgr.find_host_for_model("llama3:latest").await;
+        let host = mgr.find_host_for_model("llama3:latest", None).await;
         assert!(host.is_some());
         assert_eq!(host.unwrap().endpoint_id, "host-1");
 
         // mxbai still available (only host-1 had it)
-        assert!(mgr.find_host_for_model("mxbai-embed-large:latest").await.is_some());
+        assert!(mgr.find_host_for_model("mxbai-embed-large:latest", None).await.is_some());
     }
 
     #[tokio::test]
@@ -205,14 +219,16 @@ mod tests {
             "host-1".into(),
             test_capabilities(vec!["llama3:latest"]),
             conn1,
+            vec![],
+            None,
         ).await;
 
-        assert!(mgr.find_host_for_model("llama3:latest").await.is_some());
+        assert!(mgr.find_host_for_model("llama3:latest", None).await.is_some());
 
         mgr.unregister("host-1").await;
 
         // Model gone
-        assert!(mgr.find_host_for_model("llama3:latest").await.is_none());
+        assert!(mgr.find_host_for_model("llama3:latest", None).await.is_none());
         assert!(mgr.available_models().await.is_empty());
     }
 
@@ -223,11 +239,11 @@ mod tests {
         let (_ep1a, _ep1b, conn1) = make_test_connection().await;
         let (_ep2a, _ep2b, conn2) = make_test_connection().await;
 
-        mgr.register("host-1".into(), test_capabilities(vec!["llama3:latest"]), conn1).await;
-        mgr.register("host-2".into(), test_capabilities(vec!["llama3:latest"]), conn2).await;
+        mgr.register("host-1".into(), test_capabilities(vec!["llama3:latest"]), conn1, vec![], None).await;
+        mgr.register("host-2".into(), test_capabilities(vec!["llama3:latest"]), conn2, vec![], None).await;
 
-        let h1 = mgr.find_host_for_model("llama3:latest").await.unwrap();
-        let h2 = mgr.find_host_for_model("llama3:latest").await.unwrap();
+        let h1 = mgr.find_host_for_model("llama3:latest", None).await.unwrap();
+        let h2 = mgr.find_host_for_model("llama3:latest", None).await.unwrap();
 
         // Should get different hosts (round-robin)
         assert_ne!(h1.endpoint_id, h2.endpoint_id);
