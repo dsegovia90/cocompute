@@ -1,7 +1,7 @@
 use axum::{extract::Query, response::Html};
 use leptos::prelude::*;
 use serde::Deserialize;
-use super::components::*;
+use crate::web::components::*;
 
 #[derive(Deserialize)]
 pub struct BetaQuery {
@@ -51,6 +51,7 @@ fn BetaInvite(error: Option<String>) -> impl IntoView {
                             <div class="rounded-lg bg-red-500/10 border border-red-500/20 px-4 py-3 text-red-400 text-sm">{msg}</div>
                         })}
 
+                        <TextInput label="Name" r#type="text" name="name" required=true placeholder="Your name"/>
                         <TextInput label="Email" r#type="email" name="email" required=true placeholder="you@example.com"/>
 
                         // Role selection
@@ -111,8 +112,8 @@ fn BetaConfirmation() -> impl IntoView {
 
 pub async fn beta(Query(params): Query<BetaQuery>) -> Html<String> {
     if params.success.unwrap_or(false) {
-        super::render(BetaConfirmation())
+        crate::web::render(BetaConfirmation())
     } else {
-        super::render(BetaInvite(BetaInviteProps { error: params.error }))
+        crate::web::render(BetaInvite(BetaInviteProps { error: params.error }))
     }
 }

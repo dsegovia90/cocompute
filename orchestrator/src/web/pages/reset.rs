@@ -1,7 +1,7 @@
 use axum::{extract::Query, response::Html};
 use leptos::prelude::*;
 use serde::Deserialize;
-use super::components::*;
+use crate::web::components::*;
 
 #[derive(Deserialize)]
 pub struct ResetQuery {
@@ -79,11 +79,11 @@ pub async fn reset_page(
                 .unwrap_or(true);
 
             if expired {
-                super::render(ResetExpired())
+                crate::web::render(ResetExpired())
             } else {
-                super::render(ResetPage(ResetPageProps { token: params.token, error: params.error }))
+                crate::web::render(ResetPage(ResetPageProps { token: params.token, error: params.error }))
             }
         }
-        None => super::render(ResetExpired()),
+        None => crate::web::render(ResetExpired()),
     }
 }

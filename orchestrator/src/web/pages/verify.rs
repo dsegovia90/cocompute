@@ -1,7 +1,7 @@
 use axum::{extract::Query, response::Html};
 use leptos::prelude::*;
 use serde::Deserialize;
-use super::components::*;
+use crate::web::components::*;
 
 #[derive(Deserialize)]
 pub struct VerifyQuery {
@@ -80,11 +80,11 @@ pub async fn verify_page(
                 .unwrap_or(true);
 
             if expired {
-                super::render(VerifyExpired())
+                crate::web::render(VerifyExpired())
             } else {
-                super::render(VerifyPage(VerifyPageProps { token: params.token, error: params.error }))
+                crate::web::render(VerifyPage(VerifyPageProps { token: params.token, error: params.error }))
             }
         }
-        None => super::render(VerifyExpired()),
+        None => crate::web::render(VerifyExpired()),
     }
 }

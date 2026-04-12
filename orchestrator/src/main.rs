@@ -41,12 +41,12 @@ struct Args {
     #[arg(long, env = "COCOMPUTE_BASE_URL", default_value = "http://localhost:3000")]
     base_url: String,
 
-    /// SMTP host (email disabled if not set)
-    #[arg(long, env = "SMTP_HOST")]
+    /// SMTP host (defaults to localhost for Mailpit)
+    #[arg(long, env = "SMTP_HOST", default_value = "localhost")]
     smtp_host: Option<String>,
 
-    /// SMTP port
-    #[arg(long, env = "SMTP_PORT", default_value = "587")]
+    /// SMTP port (defaults to 1025 for Mailpit)
+    #[arg(long, env = "SMTP_PORT", default_value = "1025")]
     smtp_port: u16,
 
     /// SMTP username
@@ -71,12 +71,10 @@ enum Command {
     GenerateKey,
     /// Start the orchestrator server (default)
     Serve,
-    /// Invite a beta user — creates a user record and sends a verification email
+    /// Invite a beta user — looks up their beta invite and creates a user record
     InviteUser {
         #[arg(long)]
         email: String,
-        #[arg(long)]
-        name: String,
     },
 }
 
@@ -166,11 +164,18 @@ async fn main() -> anyhow::Result<()> {
             println!("{key}");
             Ok(())
         }
-        Command::InviteUser { email, name } => {
-            use db::entities::users;
+        Command::InviteUser { email } => {
+            use db::entities::{beta_invites, users};
             use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 
-            // Check if already invited
+            // Must have a beta invite
+            let invite = beta_invites::Entity::find()
+                .filter(beta_invites::Column::Email.eq(&email))
+                .one(&db)
+                .await?
+                .ok_or_else(|| anyhow::anyhow!("no beta invite found for {email}"))?;
+
+            // Check if user already exists
             let existing = users::Entity::find()
                 .filter(users::Column::Email.eq(&email))
                 .one(&db)
@@ -180,14 +185,14 @@ async fn main() -> anyhow::Result<()> {
             }
 
             let pid = uuid::Uuid::new_v4().to_string();
-            let token = auth::generate_api_key(); // 64-char hex token
+            let token = auth::generate_api_key();
             let throwaway_password = auth::hash_password(auth::generate_api_key()).await?;
 
             let user = users::ActiveModel {
                 pid: Set(pid),
                 email: Set(email.clone()),
                 password_hash: Set(throwaway_password),
-                name: Set(name.clone()),
+                name: Set(invite.name.clone()),
                 email_verification_token: Set(Some(token.clone())),
                 email_verification_sent_at: Set(Some(chrono::Utc::now())),
                 created_at: Set(chrono::Utc::now()),
@@ -197,11 +202,11 @@ async fn main() -> anyhow::Result<()> {
             user.insert(&db).await?;
 
             let verify_url = format!("{}/verify?token={}", args.base_url, token);
-            println!("User created for {email}");
+            println!("User created for {} ({email})", invite.name);
             println!("Verification URL: {verify_url}");
 
             if let Some(ref mailer) = mailer {
-                let parts = email::templates::invite_email(&name, &token, &args.base_url);
+                let parts = email::templates::invite_email(&invite.name, &token, &args.base_url);
                 mailer.send(&email, &parts.subject, &parts.html, &parts.text).await?;
                 println!("Invite email sent.");
             } else {

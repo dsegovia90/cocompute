@@ -1,7 +1,7 @@
 use axum::{extract::Query, response::Html};
 use leptos::prelude::*;
 use serde::Deserialize;
-use super::components::*;
+use crate::web::components::*;
 
 #[derive(Deserialize)]
 pub struct ForgotQuery {
@@ -46,5 +46,5 @@ fn ForgotPage(sent: bool) -> impl IntoView {
 }
 
 pub async fn forgot_page(Query(params): Query<ForgotQuery>) -> Html<String> {
-    super::render(ForgotPage(ForgotPageProps { sent: params.sent.unwrap_or(false) }))
+    crate::web::render(ForgotPage(ForgotPageProps { sent: params.sent.unwrap_or(false) }))
 }

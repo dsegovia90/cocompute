@@ -12,4 +12,4 @@ serve:
 
 # Development: bacon rebuilds CSS + restarts server on every change
 dev:
-    bacon dev
+    COCOMPUTE_SESSION_SECRET=dev-local-session-key-do-not-use-in-production-must-be-sixty-four-bytes bacon dev

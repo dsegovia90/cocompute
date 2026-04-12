@@ -1,7 +1,7 @@
 use axum::{extract::Query, response::Html};
 use leptos::prelude::*;
 use serde::Deserialize;
-use super::components::*;
+use crate::web::components::*;
 
 #[derive(Deserialize)]
 pub struct LoginQuery {
@@ -54,5 +54,5 @@ fn Login(error: Option<String>) -> impl IntoView {
 }
 
 pub async fn login(Query(params): Query<LoginQuery>) -> Html<String> {
-    super::render(Login(LoginProps { error: params.error }))
+    crate::web::render(Login(LoginProps { error: params.error }))
 }

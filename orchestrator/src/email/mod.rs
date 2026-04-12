@@ -19,14 +19,19 @@ impl Mailer {
         password: Option<&str>,
         from: &str,
     ) -> anyhow::Result<Self> {
-        let mut builder = AsyncSmtpTransport::<Tokio1Executor>::starttls_relay(host)?
-            .port(port);
-
-        if let (Some(user), Some(pass)) = (user, password) {
-            builder = builder.credentials(Credentials::new(user.to_string(), pass.to_string()));
-        }
-
-        let transport = builder.build();
+        // Use plain SMTP for localhost (Mailpit), STARTTLS for production
+        let transport = if host == "localhost" || host == "127.0.0.1" {
+            AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(host)
+                .port(port)
+                .build()
+        } else {
+            let mut builder = AsyncSmtpTransport::<Tokio1Executor>::starttls_relay(host)?
+                .port(port);
+            if let (Some(user), Some(pass)) = (user, password) {
+                builder = builder.credentials(Credentials::new(user.to_string(), pass.to_string()));
+            }
+            builder.build()
+        };
         let from: Mailbox = from.parse().map_err(|e| anyhow::anyhow!("invalid from address: {e}"))?;
 
         Ok(Self { transport, from })

@@ -12,6 +12,7 @@ impl MigrationName for M20260411CreateBetaInvites {
 enum BetaInvites {
     Table,
     Id,
+    Name,
     Email,
     Role,
     GpuInfo,
@@ -27,6 +28,7 @@ impl MigrationTrait for M20260411CreateBetaInvites {
                     .table(BetaInvites::Table)
                     .if_not_exists()
                     .col(ColumnDef::new(BetaInvites::Id).integer().not_null().auto_increment().primary_key())
+                    .col(ColumnDef::new(BetaInvites::Name).string().not_null())
                     .col(ColumnDef::new(BetaInvites::Email).string().not_null().unique_key())
                     .col(ColumnDef::new(BetaInvites::Role).string().not_null().default("consumer"))
                     .col(ColumnDef::new(BetaInvites::GpuInfo).string().null())

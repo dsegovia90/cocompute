@@ -1,4 +1,4 @@
-use super::components::*;
+use crate::web::components::*;
 use axum::response::Html;
 use leptos::prelude::*;
 
@@ -142,5 +142,5 @@ fn Landing() -> impl IntoView {
 }
 
 pub async fn landing() -> Html<String> {
-    super::render(Landing())
+    crate::web::render(Landing())
 }
