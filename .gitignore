@@ -8,4 +8,5 @@ target
 context.md
 .zed
 node_modules
+.env
 orchestrator/static/output.css
