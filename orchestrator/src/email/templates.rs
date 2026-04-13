@@ -85,3 +85,24 @@ Reset Password
         ),
     }
 }
+
+pub fn pool_invite_email(inviter_name: &str, pool_name: &str, accept_url: &str) -> EmailParts {
+    EmailParts {
+        subject: format!("You're invited to join {pool_name} on cocompute"),
+        html: format!(
+            r#"<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px">
+<h2 style="color:#fff;margin:0 0 16px">Pool invitation</h2>
+<p style="color:#a1a1aa;line-height:1.6">
+{inviter_name} invited you to join <strong>{pool_name}</strong> on cocompute. You'll be able to use and contribute compute to this pool.
+</p>
+<a href="{accept_url}" style="display:inline-block;margin:24px 0;padding:12px 24px;background:#6366f1;color:#fff;text-decoration:none;border-radius:8px;font-weight:600">
+Accept Invitation
+</a>
+<p style="color:#52525b;font-size:12px;margin-top:16px">If you didn't expect this, you can ignore this email.</p>
+</div>"#
+        ),
+        text: format!(
+            "{inviter_name} invited you to join {pool_name} on cocompute.\n\nAccept here: {accept_url}\n\n— the cocompute team"
+        ),
+    }
+}

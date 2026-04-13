@@ -22,7 +22,7 @@ mod web;
 #[command(name = "cocompute-orchestrator", version)]
 struct Args {
     /// Port to listen on
-    #[arg(long, default_value = "3000", env = "COCOMPUTE_PORT")]
+    #[arg(long, default_value = "4000", env = "COCOMPUTE_PORT")]
     port: u16,
 
     /// SQLite database path
@@ -38,7 +38,7 @@ struct Args {
     session_secret: Option<String>,
 
     /// Public base URL (for email links)
-    #[arg(long, env = "COCOMPUTE_BASE_URL", default_value = "http://localhost:3000")]
+    #[arg(long, env = "COCOMPUTE_BASE_URL", default_value = "http://localhost:4000")]
     base_url: String,
 
     /// SMTP host (defaults to localhost for Mailpit)
@@ -227,7 +227,7 @@ async fn main() -> anyhow::Result<()> {
             let hosts = HostManager::new();
 
             // Start iroh router to accept host connections
-            let acceptor = HostAcceptor::new(hosts.clone());
+            let acceptor = HostAcceptor::new(hosts.clone(), db.clone());
             let _router = iroh::protocol::Router::builder(endpoint.clone())
                 .accept(protocols::ALPN, acceptor)
                 .spawn();

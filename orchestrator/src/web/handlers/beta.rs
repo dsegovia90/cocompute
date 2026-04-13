@@ -12,7 +12,7 @@ use crate::{db::entities::beta_invites, email, AppState};
 pub struct BetaForm {
     name: String,
     email: String,
-    role: Option<String>,
+    role: String,
     gpu: Option<String>,
 }
 
@@ -33,7 +33,7 @@ pub async fn post_beta(
     let invite = beta_invites::ActiveModel {
         name: Set(form.name.clone()),
         email: Set(form.email.clone()),
-        role: Set(form.role.unwrap_or_else(|| "consumer".to_string())),
+        role: Set(form.role.clone()),
         gpu_info: Set(form.gpu.filter(|g| !g.is_empty())),
         created_at: Set(chrono::Utc::now()),
         ..Default::default()

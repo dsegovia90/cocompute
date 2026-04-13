@@ -14,10 +14,11 @@ fn RoleOption(
     value: &'static str,
     title: &'static str,
     description: &'static str,
+    #[prop(optional)] checked: bool,
 ) -> impl IntoView {
     view! {
         <label class="flex items-center gap-3 rounded-lg bg-[#111118] border border-[#27272A] px-3.5 py-3 cursor-pointer has-[:checked]:border-indigo-500 has-[:checked]:border-2">
-            <input type="radio" name="role" value={value} class="peer sr-only"/>
+            <input type="radio" name="role" value={value} required=true checked={checked} class="peer sr-only"/>
             // Unselected circle
             <span class="w-5 h-5 rounded-full bg-[#27272A] border border-[#3F3F46] flex items-center justify-center shrink-0 peer-checked:hidden"></span>
             // Selected circle
@@ -57,7 +58,7 @@ fn BetaInvite(error: Option<String>) -> impl IntoView {
                         // Role selection
                         <fieldset class="flex flex-col gap-2">
                             <legend class="text-[#A1A1AA] text-[13px] font-medium mb-2">"I want to..."</legend>
-                            <RoleOption value="consumer" title="Use compute (consumer)" description="Run AI models on shared GPUs"/>
+                            <RoleOption value="consumer" title="Use compute (consumer)" description="Run AI models on shared GPUs" checked=true/>
                             <RoleOption value="host" title="Share my GPU (host)" description="Earn credits by sharing idle compute"/>
                             <RoleOption value="both" title="Both" description="Use and share compute"/>
                         </fieldset>

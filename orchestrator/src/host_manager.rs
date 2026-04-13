@@ -13,6 +13,9 @@ use tokio::sync::RwLock;
 /// A connected host with its capabilities and live connection.
 #[derive(Debug, Clone)]
 pub struct ConnectedHost {
+    /// Persistent host identity (UUID, survives restarts).
+    pub host_id: String,
+    /// Ephemeral iroh transport address (changes on restart).
     pub endpoint_id: String,
     pub capabilities: Capabilities,
     pub connection: Connection,
@@ -44,8 +47,10 @@ impl HostManager {
     }
 
     /// Register a host with its capabilities, connection, and pool memberships.
+    /// Keyed by `host_id` (persistent UUID), not `endpoint_id` (ephemeral iroh address).
     pub async fn register(
         &self,
+        host_id: String,
         endpoint_id: String,
         capabilities: Capabilities,
         connection: Connection,
@@ -53,20 +58,29 @@ impl HostManager {
         user_id: Option<i32>,
     ) {
         let host = ConnectedHost {
-            endpoint_id: endpoint_id.clone(),
+            host_id: host_id.clone(),
+            endpoint_id,
             capabilities,
             connection,
             pool_ids,
             user_id,
         };
-        self.hosts.write().await.insert(endpoint_id.clone(), host);
-        tracing::info!("host registered: {endpoint_id}");
+        self.hosts.write().await.insert(host_id.clone(), host);
+        tracing::info!("host registered: {host_id}");
+    }
+
+    /// Update pool memberships for a connected host.
+    pub async fn update_pool_ids(&self, host_id: &str, pool_ids: Vec<i32>) {
+        if let Some(host) = self.hosts.write().await.get_mut(host_id) {
+            host.pool_ids = pool_ids;
+            tracing::info!("updated pool_ids for host {host_id}");
+        }
     }
 
     /// Remove a host (disconnected).
-    pub async fn unregister(&self, endpoint_id: &str) {
-        self.hosts.write().await.remove(endpoint_id);
-        tracing::info!("host unregistered: {endpoint_id}");
+    pub async fn unregister(&self, host_id: &str) {
+        self.hosts.write().await.remove(host_id);
+        tracing::info!("host unregistered: {host_id}");
     }
 
     /// Find a host that has the requested model, optionally filtered by pool.
@@ -89,11 +103,15 @@ impl HostManager {
         Some(matching[idx].clone())
     }
 
-    /// List all available model names across all hosts.
-    pub async fn available_models(&self) -> Vec<String> {
+    /// List available model names, optionally filtered by pool.
+    pub async fn available_models(&self, pool_id: Option<i32>) -> Vec<String> {
         let hosts = self.hosts.read().await;
         hosts
             .values()
+            .filter(|h| match pool_id {
+                Some(pid) => h.pool_ids.contains(&pid),
+                None => true,
+            })
             .flat_map(|h| h.capabilities.models.iter().map(|m| m.name.clone()))
             .collect()
     }
@@ -101,6 +119,16 @@ impl HostManager {
     /// Check if any hosts are connected.
     pub async fn has_hosts(&self) -> bool {
         !self.hosts.read().await.is_empty()
+    }
+
+    /// Check if a specific host is currently connected (by host_id).
+    pub async fn is_connected(&self, host_id: &str) -> bool {
+        self.hosts.read().await.contains_key(host_id)
+    }
+
+    /// Get the set of currently connected host_ids.
+    pub async fn connected_ids(&self) -> std::collections::HashSet<String> {
+        self.hosts.read().await.keys().cloned().collect()
     }
 }
 
@@ -175,6 +203,7 @@ mod tests {
         // Both hosts have llama3
         mgr.register(
             "host-1".into(),
+            "ep-1".into(),
             test_capabilities(vec!["llama3:latest", "mxbai-embed-large:latest"]),
             conn1,
             vec![],
@@ -182,6 +211,7 @@ mod tests {
         ).await;
         mgr.register(
             "host-2".into(),
+            "ep-2".into(),
             test_capabilities(vec!["llama3:latest"]),
             conn2,
             vec![],
@@ -203,7 +233,7 @@ mod tests {
         // llama3 still available via host-1
         let host = mgr.find_host_for_model("llama3:latest", None).await;
         assert!(host.is_some());
-        assert_eq!(host.unwrap().endpoint_id, "host-1");
+        assert_eq!(host.unwrap().host_id, "host-1");
 
         // mxbai still available (only host-1 had it)
         assert!(mgr.find_host_for_model("mxbai-embed-large:latest", None).await.is_some());
@@ -217,6 +247,7 @@ mod tests {
 
         mgr.register(
             "host-1".into(),
+            "ep-1".into(),
             test_capabilities(vec!["llama3:latest"]),
             conn1,
             vec![],
@@ -239,13 +270,13 @@ mod tests {
         let (_ep1a, _ep1b, conn1) = make_test_connection().await;
         let (_ep2a, _ep2b, conn2) = make_test_connection().await;
 
-        mgr.register("host-1".into(), test_capabilities(vec!["llama3:latest"]), conn1, vec![], None).await;
-        mgr.register("host-2".into(), test_capabilities(vec!["llama3:latest"]), conn2, vec![], None).await;
+        mgr.register("host-1".into(), "ep-1".into(), test_capabilities(vec!["llama3:latest"]), conn1, vec![], None).await;
+        mgr.register("host-2".into(), "ep-2".into(), test_capabilities(vec!["llama3:latest"]), conn2, vec![], None).await;
 
         let h1 = mgr.find_host_for_model("llama3:latest", None).await.unwrap();
         let h2 = mgr.find_host_for_model("llama3:latest", None).await.unwrap();
 
         // Should get different hosts (round-robin)
-        assert_ne!(h1.endpoint_id, h2.endpoint_id);
+        assert_ne!(h1.host_id, h2.host_id);
     }
 }

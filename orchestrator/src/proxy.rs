@@ -37,7 +37,7 @@ pub(crate) async fn send_to_host(
 }
 
 /// Route a request to the appropriate host based on model name, optionally filtered by pool.
-/// Returns (response, endpoint_id, iroh_rtt_ms).
+/// Returns (response, host_id, iroh_rtt_ms).
 pub(crate) async fn route_to_host(
     state: &AppState,
     model: &str,
@@ -48,13 +48,13 @@ pub(crate) async fn route_to_host(
 
     match host {
         Some(h) => {
-            let eid = h.endpoint_id.clone();
+            let hid = h.host_id.clone();
             let resp = send_to_host(&h.connection, request).await?;
             let rtt = connection_rtt_ms(&h.connection);
-            Ok((resp, eid, rtt))
+            Ok((resp, hid, rtt))
         }
         None => {
-            let available = state.hosts.available_models().await;
+            let available = state.hosts.available_models(pool_id).await;
             if available.is_empty() {
                 Err(AppError::HostUnavailable)
             } else {

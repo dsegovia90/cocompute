@@ -42,5 +42,5 @@ pub async fn post_login(
     }
 
     let jar = jar.add(auth::make_session_cookie(&user.pid));
-    (jar, Redirect::to("/")).into_response()
+    (jar, Redirect::to("/dashboard")).into_response()
 }

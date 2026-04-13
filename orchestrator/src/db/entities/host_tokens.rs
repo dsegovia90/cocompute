@@ -8,9 +8,8 @@ pub struct Model {
     #[sea_orm(unique)]
     pub token_hash: String,
     pub user_id: i32,
-    pub pool_id: i32,
     pub used_at: Option<DateTimeUtc>,
-    pub host_endpoint_id: Option<String>,
+    pub host_id: Option<String>,
     pub created_at: DateTimeUtc,
     pub expires_at: DateTimeUtc,
 }

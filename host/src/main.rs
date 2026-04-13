@@ -28,6 +28,10 @@ struct Args {
     #[arg(long, env = "COCOMPUTE_ORCHESTRATOR_ID")]
     orchestrator_id: Option<String>,
 
+    /// One-time setup token for pool registration
+    #[arg(long, env = "COCOMPUTE_SETUP_TOKEN")]
+    setup_token: Option<String>,
+
     /// Automatically check for updates on startup
     #[arg(long, default_value = "false", env = "COCOMPUTE_AUTO_UPDATE")]
     auto_update: bool,
@@ -113,10 +117,15 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("host endpoint id: {:?}", endpoint.addr().id);
 
+    // Persistent host identity — survives restarts, unlike the ephemeral iroh endpoint_id
+    let host_id = load_or_create_host_id().await?;
+    tracing::info!("host_id: {host_id}");
+
     let ollama = Ollama::new(args.ollama_url.clone(), args.ollama_port);
 
     // Connect to orchestrator with reconnection loop
     let mut cached_id: Option<String> = args.orchestrator_id.clone();
+    let mut setup_token: Option<String> = args.setup_token.clone();
 
     loop {
         let orchestrator_id = match &cached_id {
@@ -142,7 +151,7 @@ async fn main() -> anyhow::Result<()> {
             }
         };
 
-        match connect_and_serve(&endpoint, &orchestrator_id, ollama.clone()).await {
+        match connect_and_serve(&endpoint, &orchestrator_id, ollama.clone(), setup_token.take(), host_id.clone()).await {
             Ok(()) => break,
             Err(e) => {
                 tracing::error!("disconnected from orchestrator: {e}");
@@ -154,6 +163,30 @@ async fn main() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+/// Load or create a persistent host_id at ~/.cocompute/host_id.
+async fn load_or_create_host_id() -> anyhow::Result<String> {
+    let dir = dirs::home_dir()
+        .ok_or_else(|| anyhow::anyhow!("could not determine home directory"))?
+        .join(".cocompute");
+    tokio::fs::create_dir_all(&dir).await?;
+
+    let path = dir.join("host_id");
+    match tokio::fs::read_to_string(&path).await {
+        Ok(id) => {
+            let id = id.trim().to_string();
+            if !id.is_empty() {
+                return Ok(id);
+            }
+        }
+        Err(_) => {}
+    }
+
+    let id = uuid::Uuid::new_v4().to_string();
+    tokio::fs::write(&path, &id).await?;
+    tracing::info!("generated new host_id at {}", path.display());
+    Ok(id)
 }
 
 #[cfg(test)]

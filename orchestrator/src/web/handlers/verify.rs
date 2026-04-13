@@ -81,5 +81,5 @@ pub async fn post_verify(
     }
 
     let jar = jar.add(auth::make_session_cookie(&updated.pid));
-    (jar, Redirect::to("/")).into_response()
+    (jar, Redirect::to("/dashboard")).into_response()
 }

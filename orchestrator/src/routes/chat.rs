@@ -144,7 +144,7 @@ pub(crate) async fn create_chat_completion_stream(
     let host = match host {
         Some(h) => h,
         None => {
-            let available = state.hosts.available_models().await;
+            let available = state.hosts.available_models(pool_id).await;
             if available.is_empty() {
                 return Err(AppError::HostUnavailable);
             } else {
@@ -153,7 +153,7 @@ pub(crate) async fn create_chat_completion_stream(
         }
     };
 
-    let host_id = host.endpoint_id.clone();
+    let host_id = host.host_id.clone();
     let conn = host.connection.clone();
 
     let (send, mut recv) = conn

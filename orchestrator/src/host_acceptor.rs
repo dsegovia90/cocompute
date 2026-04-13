@@ -4,22 +4,117 @@ use common::{
 };
 use common::helpers::write_p2p;
 use iroh::protocol::AcceptError;
+use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set};
 
+use crate::db::entities::{host_pool_memberships, host_tokens, hosts};
 use crate::host_manager::HostManager;
 
 /// Protocol handler on the orchestrator that accepts incoming host connections.
-/// When a host connects:
-/// 1. Read the first stream — expect a Registry request with capabilities
-/// 2. Store the connection + capabilities in the HostManager
-/// 3. Monitor the connection — when it closes, unregister the host
 #[derive(Debug, Clone)]
 pub struct HostAcceptor {
     hosts: HostManager,
+    db: DatabaseConnection,
 }
 
 impl HostAcceptor {
-    pub fn new(hosts: HostManager) -> Self {
-        Self { hosts }
+    pub fn new(hosts: HostManager, db: DatabaseConnection) -> Self {
+        Self { hosts, db }
+    }
+
+    /// Validate a setup token and establish user ownership of the host.
+    /// Returns the user_id if valid, None if invalid/expired/used.
+    async fn validate_token(
+        &self,
+        token: &str,
+        host_id: &str,
+    ) -> Option<i32> {
+        let token_hash = crate::auth::hash_key(token);
+
+        let record = host_tokens::Entity::find()
+            .filter(host_tokens::Column::TokenHash.eq(&token_hash))
+            .one(&self.db)
+            .await
+            .ok()
+            .flatten()?;
+
+        if record.used_at.is_some() {
+            tracing::warn!("setup token already used for host {host_id}");
+            return None;
+        }
+
+        if chrono::Utc::now() > record.expires_at {
+            tracing::warn!("setup token expired for host {host_id}");
+            return None;
+        }
+
+        // Mark token as used
+        let mut active: host_tokens::ActiveModel = record.clone().into();
+        active.used_at = Set(Some(chrono::Utc::now()));
+        active.host_id = Set(Some(host_id.to_string()));
+        if let Err(e) = active.update(&self.db).await {
+            tracing::error!("failed to mark token as used: {e}");
+            return None;
+        }
+
+        tracing::info!("host {host_id} claimed by user {}", record.user_id);
+        Some(record.user_id)
+    }
+
+    /// Restore pool memberships from DB for a reconnecting host.
+    async fn restore_pools(&self, host_id: &str) -> (Vec<i32>, Option<i32>) {
+        let memberships = host_pool_memberships::Entity::find()
+            .filter(host_pool_memberships::Column::HostEndpointId.eq(host_id))
+            .all(&self.db)
+            .await
+            .unwrap_or_default();
+
+        let pool_ids: Vec<i32> = memberships.iter().map(|m| m.pool_id).collect();
+
+        let user_id = hosts::Entity::find()
+            .filter(hosts::Column::EndpointId.eq(host_id))
+            .one(&self.db)
+            .await
+            .ok()
+            .flatten()
+            .and_then(|h| h.user_id);
+
+        if !pool_ids.is_empty() {
+            tracing::info!("host {host_id} restored {} pool memberships", pool_ids.len());
+        }
+
+        (pool_ids, user_id)
+    }
+
+    /// Upsert the host record in the DB. Uses host_id as the stable identity in endpoint_id column.
+    async fn upsert_host(&self, host_id: &str, user_id: Option<i32>) {
+        let existing = hosts::Entity::find()
+            .filter(hosts::Column::EndpointId.eq(host_id))
+            .one(&self.db)
+            .await
+            .ok()
+            .flatten();
+
+        match existing {
+            Some(host) => {
+                let mut active: hosts::ActiveModel = host.into();
+                active.status = Set("connected".to_string());
+                active.last_seen = Set(Some(chrono::Utc::now()));
+                if let Some(uid) = user_id {
+                    active.user_id = Set(Some(uid));
+                }
+                let _ = active.update(&self.db).await;
+            }
+            None => {
+                let host = hosts::ActiveModel {
+                    endpoint_id: Set(host_id.to_string()),
+                    status: Set("connected".to_string()),
+                    last_seen: Set(Some(chrono::Utc::now())),
+                    user_id: Set(user_id),
+                    ..Default::default()
+                };
+                let _ = host.insert(&self.db).await;
+            }
+        }
     }
 }
 
@@ -29,9 +124,10 @@ impl iroh::protocol::ProtocolHandler for HostAcceptor {
         connection: iroh::endpoint::Connection,
     ) -> impl Future<Output = Result<(), AcceptError>> + Send {
         let hosts = self.hosts.clone();
+        let acceptor = self.clone();
         Box::pin(async move {
             let endpoint_id = connection.remote_id().to_string();
-            tracing::info!("host connecting: {endpoint_id}");
+            tracing::info!("host connecting: endpoint_id={endpoint_id}");
 
             // Read the first stream — expect a Registry request
             let (send, recv) = connection.accept_bi().await?;
@@ -40,15 +136,15 @@ impl iroh::protocol::ProtocolHandler for HostAcceptor {
                 .await
                 .map_err(|e| std::io::Error::other(format!("failed to read registry: {e}")))?;
 
-            let (capabilities, setup_token) = match request {
+            let (capabilities, host_id, setup_token) = match request {
                 Request::Registry(reg_req) => {
                     match reg_req {
-                        common::protocols::registry::RegistryRequest::Register { capabilities, setup_token } => {
+                        common::protocols::registry::RegistryRequest::Register { capabilities, host_id, setup_token } => {
                             tracing::info!(
-                                "host {endpoint_id} registered with {} models",
+                                "host {host_id} (endpoint={endpoint_id}) registered with {} models",
                                 capabilities.models.len()
                             );
-                            (capabilities, setup_token)
+                            (capabilities, host_id, setup_token)
                         }
                         _ => {
                             return Err(std::io::Error::other(
@@ -63,7 +159,33 @@ impl iroh::protocol::ProtocolHandler for HostAcceptor {
                     ).into());
                 }
             };
-            let _ = setup_token; // TODO: validate token and assign pools
+
+            // Determine user ownership and pool memberships
+            let user_id = if let Some(token) = setup_token {
+                // New host with setup token — establishes user ownership
+                match acceptor.validate_token(&token, &host_id).await {
+                    Some(uid) => Some(uid),
+                    None => {
+                        tracing::warn!("invalid setup token for {host_id}, accepting as unowned");
+                        None
+                    }
+                }
+            } else {
+                // Reconnecting host — look up existing user ownership from DB
+                hosts::Entity::find()
+                    .filter(hosts::Column::EndpointId.eq(&host_id))
+                    .one(&acceptor.db)
+                    .await
+                    .ok()
+                    .flatten()
+                    .and_then(|h| h.user_id)
+            };
+
+            // Restore pool memberships from DB (works for both new and reconnecting hosts)
+            let (pool_ids, _) = acceptor.restore_pools(&host_id).await;
+
+            // Upsert host record using host_id as stable identity
+            acceptor.upsert_host(&host_id, user_id).await;
 
             // Send ack
             let response = Response::Registry(RegistryResponse::Ack);
@@ -71,53 +193,66 @@ impl iroh::protocol::ProtocolHandler for HostAcceptor {
                 .await
                 .map_err(|e| std::io::Error::other(format!("failed to send ack: {e}")))?;
 
-            // Store the connection in the HostManager
-            hosts.register(endpoint_id.clone(), capabilities, connection.clone(), vec![], None).await;
+            // Store in HostManager keyed by host_id
+            hosts.register(host_id.clone(), endpoint_id.clone(), capabilities, connection.clone(), pool_ids.clone(), user_id).await;
 
-            // Handle subsequent streams from the host (heartbeats)
+            // Handle subsequent streams (heartbeats + re-registration)
             loop {
                 match connection.accept_bi().await {
                     Ok((send, recv)) => {
                         let request: Request = match read_p2p(recv).await {
                             Ok(r) => r,
                             Err(e) => {
-                                tracing::warn!("host {endpoint_id} stream read error: {e}");
+                                tracing::warn!("host {host_id} stream read error: {e}");
                                 break;
                             }
                         };
 
                         match request {
                             Request::Registry(common::protocols::registry::RegistryRequest::Heartbeat) => {
-                                tracing::debug!("heartbeat from {endpoint_id}");
+                                tracing::debug!("heartbeat from {host_id}");
                                 let resp = Response::Registry(RegistryResponse::Ack);
                                 if let Err(e) = write_p2p(send, resp).await {
-                                    tracing::warn!("heartbeat ack failed for {endpoint_id}: {e}");
+                                    tracing::warn!("heartbeat ack failed for {host_id}: {e}");
                                     break;
                                 }
                             }
                             Request::Registry(common::protocols::registry::RegistryRequest::Register { capabilities, .. }) => {
-                                tracing::info!("host {endpoint_id} re-registered with {} models", capabilities.models.len());
-                                hosts.register(endpoint_id.clone(), capabilities, connection.clone(), vec![], None).await;
+                                tracing::info!("host {host_id} re-registered with {} models", capabilities.models.len());
+                                let (pool_ids, user_id) = acceptor.restore_pools(&host_id).await;
+                                hosts.register(host_id.clone(), endpoint_id.clone(), capabilities, connection.clone(), pool_ids, user_id).await;
                                 let resp = Response::Registry(RegistryResponse::Ack);
                                 if let Err(e) = write_p2p(send, resp).await {
-                                    tracing::warn!("re-register ack failed for {endpoint_id}: {e}");
+                                    tracing::warn!("re-register ack failed for {host_id}: {e}");
                                     break;
                                 }
                             }
                             _ => {
-                                tracing::warn!("unexpected request from host {endpoint_id} on host-initiated stream");
+                                tracing::warn!("unexpected request from host {host_id}");
                             }
                         }
                     }
                     Err(e) => {
-                        tracing::info!("host {endpoint_id} connection closed: {e}");
+                        tracing::info!("host {host_id} connection closed: {e}");
                         break;
                     }
                 }
             }
 
-            tracing::info!("host disconnected: {endpoint_id}");
-            hosts.unregister(&endpoint_id).await;
+            // Mark host as disconnected in DB
+            if let Ok(Some(host)) = hosts::Entity::find()
+                .filter(hosts::Column::EndpointId.eq(&host_id))
+                .one(&acceptor.db)
+                .await
+            {
+                let mut active: hosts::ActiveModel = host.into();
+                active.status = Set("disconnected".to_string());
+                active.last_seen = Set(Some(chrono::Utc::now()));
+                let _ = active.update(&acceptor.db).await;
+            }
+
+            tracing::info!("host disconnected: {host_id}");
+            hosts.unregister(&host_id).await;
 
             Ok(())
         })

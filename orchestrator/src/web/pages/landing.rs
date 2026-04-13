@@ -1,9 +1,10 @@
 use crate::web::components::*;
 use axum::response::Html;
+use axum_extra::extract::cookie::SignedCookieJar;
 use leptos::prelude::*;
 
 #[component]
-fn Landing() -> impl IntoView {
+fn Landing(logged_in: bool) -> impl IntoView {
     view! {
         <Base title="cocompute">
             <PageShell>
@@ -12,10 +13,20 @@ fn Landing() -> impl IntoView {
                 <nav class="flex items-center justify-between px-6 py-4">
                     <span class="text-white font-bold text-lg">"cocompute"</span>
                     <div class="flex items-center gap-5">
-                        <a href="/login" class="text-[#A1A1AA] text-sm font-medium hover:text-white transition">"Log in"</a>
-                        <a href="/beta" class="hidden md:inline-block rounded-lg bg-indigo-500 px-5 py-2.5 text-white text-sm font-semibold hover:bg-indigo-600 transition">
-                            "Request Beta Invite"
-                        </a>
+                        {if logged_in {
+                            view! {
+                                <a href="/dashboard" class="rounded-lg bg-indigo-500 px-5 py-2.5 text-white text-sm font-semibold hover:bg-indigo-600 transition">
+                                    "Dashboard"
+                                </a>
+                            }.into_any()
+                        } else {
+                            view! {
+                                <a href="/login" class="text-[#A1A1AA] text-sm font-medium hover:text-white transition">"Log in"</a>
+                                <a href="/beta" class="hidden md:inline-block rounded-lg bg-indigo-500 px-5 py-2.5 text-white text-sm font-semibold hover:bg-indigo-600 transition">
+                                    "Request Beta Invite"
+                                </a>
+                            }.into_any()
+                        }}
                     </div>
                 </nav>
 
@@ -141,6 +152,7 @@ fn Landing() -> impl IntoView {
     }
 }
 
-pub async fn landing() -> Html<String> {
-    crate::web::render(Landing())
+pub async fn landing(jar: SignedCookieJar) -> Html<String> {
+    let logged_in = jar.get(crate::auth::SESSION_COOKIE).is_some();
+    crate::web::render(Landing(LandingProps { logged_in }))
 }

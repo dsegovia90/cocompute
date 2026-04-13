@@ -14,9 +14,8 @@ enum HostTokens {
     Id,
     TokenHash,
     UserId,
-    PoolId,
     UsedAt,
-    HostEndpointId,
+    HostId,
     CreatedAt,
     ExpiresAt,
 }
@@ -32,9 +31,8 @@ impl MigrationTrait for M20260412CreateHostTokens {
                     .col(ColumnDef::new(HostTokens::Id).integer().not_null().auto_increment().primary_key())
                     .col(ColumnDef::new(HostTokens::TokenHash).string().not_null().unique_key())
                     .col(ColumnDef::new(HostTokens::UserId).integer().not_null())
-                    .col(ColumnDef::new(HostTokens::PoolId).integer().not_null())
                     .col(ColumnDef::new(HostTokens::UsedAt).timestamp().null())
-                    .col(ColumnDef::new(HostTokens::HostEndpointId).string().null())
+                    .col(ColumnDef::new(HostTokens::HostId).string().null())
                     .col(ColumnDef::new(HostTokens::CreatedAt).timestamp().not_null().default(Expr::current_timestamp()))
                     .col(ColumnDef::new(HostTokens::ExpiresAt).timestamp().not_null())
                     .to_owned(),

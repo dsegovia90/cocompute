@@ -10,6 +10,7 @@ openssl-vendored = ["dep:openssl"]
 openssl = { version = "0.10", features = ["vendored"], optional = true }
 anyhow = { workspace = true }
 clap = { version = "4.6.0", features = ["derive", "env"] }
+dirs = "6"
 common = { path = "../common/" }
 iroh = { workspace = true }
 ollama-rs = { version = "0.3.4", features = ["stream"] }
@@ -20,6 +21,7 @@ tokio = { workspace = true }
 tokio-stream = "0.1.18"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter", "fmt"] }
+uuid = { version = "1", features = ["v4"] }
 exec = "0.3.1"
 semver = "1.0.27"
 schemars = "1.2.1"
