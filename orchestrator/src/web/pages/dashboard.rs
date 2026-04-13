@@ -313,7 +313,7 @@ pub async fn dashboard(
         .await
         .unwrap_or_default();
 
-    // Build a map of pool_id → pool_name for quick lookups
+    // Pre-load lookup maps to avoid N+1 queries
     let all_pools = pools::Entity::find()
         .all(&state.db)
         .await
@@ -321,6 +321,24 @@ pub async fn dashboard(
     let pool_name_map: std::collections::HashMap<i32, String> = all_pools
         .iter()
         .map(|p| (p.id, p.name.clone()))
+        .collect();
+
+    let all_users = users::Entity::find()
+        .all(&state.db)
+        .await
+        .unwrap_or_default();
+    let user_name_map: std::collections::HashMap<i32, String> = all_users
+        .iter()
+        .map(|u| (u.id, u.name.clone()))
+        .collect();
+
+    let all_hosts = hosts::Entity::find()
+        .all(&state.db)
+        .await
+        .unwrap_or_default();
+    let host_owner_map: std::collections::HashMap<String, Option<i32>> = all_hosts
+        .iter()
+        .map(|h| (h.endpoint_id.clone(), h.user_id))
         .collect();
 
     let mut owned_hosts = Vec::new();
@@ -377,42 +395,24 @@ pub async fn dashboard(
             .await
             .unwrap_or_default();
 
-        let mut host_views = Vec::new();
-        for membership in &pool_host_memberships {
-            let host_id = &membership.host_endpoint_id; // This is actually the host_id now
+        let host_views: Vec<HostView> = pool_host_memberships
+            .iter()
+            .map(|membership| {
+                let host_id = &membership.host_endpoint_id;
+                let owner_name = host_owner_map
+                    .get(host_id)
+                    .and_then(|uid| uid.and_then(|id| user_name_map.get(&id).cloned()))
+                    .unwrap_or_else(|| "unowned".to_string());
 
-            // Look up host owner
-            let host_record = hosts::Entity::find()
-                .filter(hosts::Column::EndpointId.eq(host_id))
-                .one(&state.db)
-                .await
-                .ok()
-                .flatten();
-
-            let owner_name = if let Some(ref h) = host_record {
-                if let Some(uid) = h.user_id {
-                    users::Entity::find_by_id(uid)
-                        .one(&state.db)
-                        .await
-                        .ok()
-                        .flatten()
-                        .map(|u| u.name.clone())
-                        .unwrap_or_else(|| "unknown".to_string())
-                } else {
-                    "unowned".to_string()
+                HostView {
+                    host_id: host_id.clone(),
+                    id_prefix: host_id.chars().take(8).collect(),
+                    id_suffix: host_id.chars().rev().take(4).collect::<String>().chars().rev().collect(),
+                    owner_name,
+                    online: connected.contains(host_id),
                 }
-            } else {
-                "unknown".to_string()
-            };
-
-            host_views.push(HostView {
-                host_id: host_id.clone(),
-                id_prefix: host_id.chars().take(8).collect(),
-                id_suffix: host_id.chars().rev().take(4).collect::<String>().chars().rev().collect(),
-                owner_name,
-                online: connected.contains(host_id),
-            });
-        }
+            })
+            .collect();
 
         // Get API keys for this pool
         let keys = api_keys::Entity::find()
@@ -440,21 +440,20 @@ pub async fn dashboard(
             .await
             .unwrap_or_default();
 
-        let mut member_views = Vec::new();
-        for m in &members {
-            let member_name = users::Entity::find_by_id(m.user_id)
-                .one(&state.db)
-                .await
-                .ok()
-                .flatten()
-                .map(|u| u.name.clone())
-                .unwrap_or_else(|| "unknown".to_string());
-            member_views.push(MemberView {
-                name: member_name,
-                role: m.role.clone(),
-                accepted: m.accepted_at.is_some(),
-            });
-        }
+        let member_views: Vec<MemberView> = members
+            .iter()
+            .map(|m| {
+                let name = user_name_map
+                    .get(&m.user_id)
+                    .cloned()
+                    .unwrap_or_else(|| "unknown".to_string());
+                MemberView {
+                    name,
+                    role: m.role.clone(),
+                    accepted: m.accepted_at.is_some(),
+                }
+            })
+            .collect();
 
         user_pools.push(PoolView {
             pid: pool.pid.clone(),

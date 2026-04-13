@@ -115,10 +115,11 @@ pub async fn invite_member(
         _ => return Redirect::to("/dashboard").into_response(),
     };
 
-    // Find the invitee by email
+    // Find the invitee by email (must be a verified user)
     use crate::db::entities::users;
     let invitee = users::Entity::find()
         .filter(users::Column::Email.eq(&form.email))
+        .filter(users::Column::EmailVerifiedAt.is_not_null())
         .one(&state.db)
         .await;
 

@@ -104,7 +104,7 @@ pub async fn create_pool_api_key(
     })).0).into_response()
 }
 
-/// Create a global pool API key.
+/// Create a global pool API key. Requires membership in the global pool.
 pub async fn create_global_api_key(
     State(state): State<AppState>,
     CurrentUser(user): CurrentUser,
@@ -120,6 +120,20 @@ pub async fn create_global_api_key(
         Ok(Some(p)) => p,
         _ => return Redirect::to("/dashboard").into_response(),
     };
+
+    // Verify user is a member of the global pool
+    let is_member = pool_members::Entity::find()
+        .filter(pool_members::Column::PoolId.eq(global_pool.id))
+        .filter(pool_members::Column::UserId.eq(user.id))
+        .one(&state.db)
+        .await
+        .ok()
+        .flatten()
+        .is_some();
+
+    if !is_member {
+        return Redirect::to("/dashboard").into_response();
+    }
 
     let raw_key = auth::generate_api_key();
     let key_hash = auth::hash_key(&raw_key);
