@@ -35,6 +35,9 @@ COPY common/ common/
 COPY host/ host/
 COPY orchestrator/ orchestrator/
 
+# Copy CSS build output (needed by asset_hash.rs include_bytes! at compile time)
+COPY --from=css /app/orchestrator/static/output.css orchestrator/static/output.css
+
 # Build both binaries
 RUN cargo build --release -p cocompute_orchestrator
 RUN cargo build --release -p cocompute_host
