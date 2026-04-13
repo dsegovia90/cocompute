@@ -6,11 +6,15 @@ set -euo pipefail
 
 TOKEN=""
 BASE_URL="${COCOMPUTE_URL:-}"
+OLLAMA_URL=""
+OLLAMA_PORT=""
 INSTALL_DIR="$HOME/.cocompute"
 
 while [[ $# -gt 0 ]]; do
     case $1 in
         --token) TOKEN="$2"; shift 2 ;;
+        --ollama-url) OLLAMA_URL="$2"; shift 2 ;;
+        --ollama-port) OLLAMA_PORT="$2"; shift 2 ;;
         *) echo "Unknown option: $1"; exit 1 ;;
     esac
 done
@@ -56,7 +60,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=$INSTALL_DIR/cocompute-host --orchestrator-url $BASE_URL --setup-token $TOKEN
+ExecStart=$INSTALL_DIR/cocompute-host --orchestrator-url $BASE_URL --setup-token $TOKEN$EXTRA_ARGS
 Restart=always
 RestartSec=5
 Environment=RUST_LOG=info
@@ -82,6 +86,15 @@ install_launchd() {
     local LOG_DIR="$INSTALL_DIR/logs"
     mkdir -p "$PLIST_DIR" "$LOG_DIR"
 
+    # Build plist args
+    local PLIST_EXTRA=""
+    [ -n "$OLLAMA_URL" ] && PLIST_EXTRA="$PLIST_EXTRA
+        <string>--ollama-url</string>
+        <string>$OLLAMA_URL</string>"
+    [ -n "$OLLAMA_PORT" ] && PLIST_EXTRA="$PLIST_EXTRA
+        <string>--ollama-port</string>
+        <string>$OLLAMA_PORT</string>"
+
     cat > "$PLIST" <<PLISTEOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -95,7 +108,7 @@ install_launchd() {
         <string>--orchestrator-url</string>
         <string>$BASE_URL</string>
         <string>--setup-token</string>
-        <string>$TOKEN</string>
+        <string>$TOKEN</string>$PLIST_EXTRA
     </array>
     <key>RunAtLoad</key>
     <true/>
@@ -127,12 +140,19 @@ PLISTEOF
     echo "  Restart: launchctl kickstart -k gui/$(id -u)/ai.cocompute.host"
 }
 
+# Build extra args for ollama config
+EXTRA_ARGS=""
+[ -n "$OLLAMA_URL" ] && EXTRA_ARGS="$EXTRA_ARGS --ollama-url $OLLAMA_URL"
+[ -n "$OLLAMA_PORT" ] && EXTRA_ARGS="$EXTRA_ARGS --ollama-port $OLLAMA_PORT"
+
 # Main install flow
 echo ""
 echo "cocompute host installer"
 echo "  Platform:      $PLATFORM"
 echo "  Orchestrator:  $ORCHESTRATOR"
 echo "  Install dir:   $INSTALL_DIR"
+[ -n "$OLLAMA_URL" ] && echo "  Ollama URL:    $OLLAMA_URL"
+[ -n "$OLLAMA_PORT" ] && echo "  Ollama port:   $OLLAMA_PORT"
 echo ""
 
 mkdir -p "$INSTALL_DIR"
@@ -155,5 +175,5 @@ elif [ "$OS" = "darwin" ]; then
     install_launchd
 else
     echo "Unknown OS ($OS). Skipping service install."
-    echo "Run manually: $INSTALL_DIR/cocompute-host --orchestrator-url $BASE_URL --setup-token $TOKEN"
+    echo "Run manually: $INSTALL_DIR/cocompute-host --orchestrator-url $BASE_URL --setup-token $TOKEN$EXTRA_ARGS"
 fi

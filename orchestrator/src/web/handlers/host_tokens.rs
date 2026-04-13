@@ -13,10 +13,10 @@ use crate::{
 
 #[component]
 fn HostTokenPage(token: String, endpoint_id: String, base_url: String, is_dev: bool) -> impl IntoView {
-    let curl_cmd = format!(
+    let base_cmd = format!(
         "curl -sSf {base_url}/install.sh | bash -s -- --token {token}"
     );
-    let cargo_cmd = format!(
+    let dev_base_cmd = format!(
         "cargo run -p cocompute_host -- --orchestrator-url {base_url} --setup-token {token}"
     );
     view! {
@@ -28,18 +28,41 @@ fn HostTokenPage(token: String, endpoint_id: String, base_url: String, is_dev: b
                             <h1 class="text-white text-xl font-bold">"Add Host"</h1>
                             <p class="text-[#71717A] text-sm mt-1">"Register a new machine to your account"</p>
                         </div>
+
+                        // Ollama config (optional)
+                        <div class="flex flex-col gap-2">
+                            <p class="text-[#A1A1AA] text-xs font-medium">"Ollama location (optional, for remote Ollama instances)"</p>
+                            <div class="flex gap-2">
+                                <input
+                                    id="ollama-url"
+                                    type="text"
+                                    placeholder="http://localhost"
+                                    class="h-8 flex-1 rounded-lg bg-[#111118] border border-[#27272A] px-3 text-white text-xs placeholder-[#3F3F46] outline-none focus:border-indigo-500 transition"
+                                    oninput="updateCmds()"
+                                />
+                                <input
+                                    id="ollama-port"
+                                    type="text"
+                                    placeholder="11434"
+                                    class="h-8 w-24 rounded-lg bg-[#111118] border border-[#27272A] px-3 text-white text-xs placeholder-[#3F3F46] outline-none focus:border-indigo-500 transition"
+                                    oninput="updateCmds()"
+                                />
+                            </div>
+                        </div>
+
+                        // Install command
                         <div>
                             <p class="text-[#A1A1AA] text-sm mb-3">"Run this command on the machine you want to add:"</p>
-                            <div class="bg-[#111118] border border-[#27272A] rounded-lg p-4 font-mono text-xs text-[#67e8f9] break-all select-all">
-                                {curl_cmd}
+                            <div id="curl-cmd" class="bg-[#111118] border border-[#27272A] rounded-lg p-4 font-mono text-xs text-[#67e8f9] break-all select-all">
+                                {base_cmd.clone()}
                             </div>
                         </div>
 
                         {is_dev.then(|| view! {
                             <div>
                                 <p class="text-[#A1A1AA] text-sm mb-3">"Or run from source (dev):"</p>
-                                <div class="bg-[#111118] border border-[#27272A] rounded-lg p-4 font-mono text-xs text-amber-400 break-all select-all">
-                                    {cargo_cmd}
+                                <div id="dev-cmd" class="bg-[#111118] border border-[#27272A] rounded-lg p-4 font-mono text-xs text-amber-400 break-all select-all">
+                                    {dev_base_cmd.clone()}
                                 </div>
                             </div>
                         })}
@@ -51,6 +74,21 @@ fn HostTokenPage(token: String, endpoint_id: String, base_url: String, is_dev: b
                         <a href="/dashboard" class="text-indigo-500 text-sm font-medium hover:underline">"Back to dashboard"</a>
                     </div>
                 </div>
+
+                <script>{format!(r#"
+                    var baseCmd = `{base_cmd}`;
+                    var devCmd = `{dev_base_cmd}`;
+                    function updateCmds() {{
+                        var url = document.getElementById('ollama-url').value.trim();
+                        var port = document.getElementById('ollama-port').value.trim();
+                        var extra = '';
+                        if (url) extra += ' --ollama-url ' + url;
+                        if (port) extra += ' --ollama-port ' + port;
+                        document.getElementById('curl-cmd').textContent = baseCmd + extra;
+                        var dev = document.getElementById('dev-cmd');
+                        if (dev) dev.textContent = devCmd + extra;
+                    }}
+                "#)}</script>
             </PageShell>
         </Base>
     }
