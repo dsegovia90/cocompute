@@ -17,8 +17,13 @@ pub struct ModelInfo {
 
 #[derive(Debug, Encode, Decode)]
 pub enum RegistryRequest {
-    /// Host registers with its capabilities.
-    Register(Capabilities),
+    /// Host registers with its capabilities, stable identity, and optional setup token.
+    Register {
+        capabilities: Capabilities,
+        /// Persistent host UUID, stable across restarts (unlike the ephemeral iroh endpoint_id).
+        host_id: String,
+        setup_token: Option<String>,
+    },
     /// Heartbeat — host is still alive.
     Heartbeat,
 }

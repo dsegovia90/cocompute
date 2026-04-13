@@ -10,7 +10,6 @@ css-watch:
 serve:
     cargo run -p cocompute_orchestrator -- serve
 
-# Build CSS + run the orchestrator (dev)
+# Development: bacon rebuilds CSS + restarts server on every change
 dev:
-    just css
-    just serve
+    COCOMPUTE_SESSION_SECRET=dev-local-session-key-do-not-use-in-production-must-be-sixty-four-bytes bacon dev

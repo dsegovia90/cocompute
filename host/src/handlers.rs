@@ -266,8 +266,8 @@ pub(crate) async fn handle_chat_stream(
 
 pub(crate) fn handle_registry(req: RegistryRequest) -> Response {
     match req {
-        RegistryRequest::Register(caps) => {
-            tracing::info!("re-registration with {} models", caps.models.len());
+        RegistryRequest::Register { capabilities, .. } => {
+            tracing::info!("re-registration with {} models", capabilities.models.len());
             Response::Registry(common::protocols::registry::RegistryResponse::Ack)
         }
         RegistryRequest::Heartbeat => {

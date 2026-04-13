@@ -65,9 +65,9 @@ VOLUME /data
 
 ENV COCOMPUTE_DB_PATH=/data/cocompute.db
 ENV COCOMPUTE_KEY_PATH=/data/orchestrator.key
-ENV COCOMPUTE_PORT=3000
+ENV COCOMPUTE_PORT=4000
 ENV COCOMPUTE_STATIC_DIR=/static
 
-EXPOSE 3000
+EXPOSE 4000
 
 ENTRYPOINT ["cocompute-orchestrator", "serve"]

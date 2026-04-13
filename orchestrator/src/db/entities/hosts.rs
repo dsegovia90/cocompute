@@ -10,6 +10,7 @@ pub struct Model {
     pub capabilities: Option<Json>,
     pub status: String,
     pub last_seen: Option<DateTimeUtc>,
+    pub user_id: Option<i32>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

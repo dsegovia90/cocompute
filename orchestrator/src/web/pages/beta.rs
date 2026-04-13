@@ -1,16 +1,24 @@
-use axum::response::Html;
+use axum::{extract::Query, response::Html};
 use leptos::prelude::*;
-use super::components::*;
+use serde::Deserialize;
+use crate::web::components::*;
+
+#[derive(Deserialize)]
+pub struct BetaQuery {
+    pub error: Option<String>,
+    pub success: Option<bool>,
+}
 
 #[component]
 fn RoleOption(
     value: &'static str,
     title: &'static str,
     description: &'static str,
+    #[prop(optional)] checked: bool,
 ) -> impl IntoView {
     view! {
         <label class="flex items-center gap-3 rounded-lg bg-[#111118] border border-[#27272A] px-3.5 py-3 cursor-pointer has-[:checked]:border-indigo-500 has-[:checked]:border-2">
-            <input type="radio" name="role" value={value} class="peer sr-only"/>
+            <input type="radio" name="role" value={value} required=true checked={checked} class="peer sr-only"/>
             // Unselected circle
             <span class="w-5 h-5 rounded-full bg-[#27272A] border border-[#3F3F46] flex items-center justify-center shrink-0 peer-checked:hidden"></span>
             // Selected circle
@@ -26,7 +34,7 @@ fn RoleOption(
 }
 
 #[component]
-fn BetaInvite() -> impl IntoView {
+fn BetaInvite(error: Option<String>) -> impl IntoView {
     view! {
         <Base title="cocompute — beta invite">
             <PageShell>
@@ -40,12 +48,17 @@ fn BetaInvite() -> impl IntoView {
                             <p class="text-[#52525B] text-[13px]">"We're launching invite-only. Tell us about yourself."</p>
                         </div>
 
+                        {error.map(|msg| view! {
+                            <div class="rounded-lg bg-red-500/10 border border-red-500/20 px-4 py-3 text-red-400 text-sm">{msg}</div>
+                        })}
+
+                        <TextInput label="Name" r#type="text" name="name" required=true placeholder="Your name"/>
                         <TextInput label="Email" r#type="email" name="email" required=true placeholder="you@example.com"/>
 
                         // Role selection
                         <fieldset class="flex flex-col gap-2">
                             <legend class="text-[#A1A1AA] text-[13px] font-medium mb-2">"I want to..."</legend>
-                            <RoleOption value="consumer" title="Use compute (consumer)" description="Run AI models on shared GPUs"/>
+                            <RoleOption value="consumer" title="Use compute (consumer)" description="Run AI models on shared GPUs" checked=true/>
                             <RoleOption value="host" title="Share my GPU (host)" description="Earn credits by sharing idle compute"/>
                             <RoleOption value="both" title="Both" description="Use and share compute"/>
                         </fieldset>
@@ -81,6 +94,27 @@ fn BetaInvite() -> impl IntoView {
     }
 }
 
-pub async fn beta() -> Html<String> {
-    super::render(BetaInvite())
+#[component]
+fn BetaConfirmation() -> impl IntoView {
+    view! {
+        <Base title="cocompute — you're on the list">
+            <PageShell>
+                <div class="flex items-center justify-center min-h-screen">
+                    <div class="w-[400px] rounded-xl bg-[#16161E] border border-[#27272A] px-10 pt-12 pb-10 flex flex-col gap-5 items-center text-center">
+                        <h1 class="text-white text-2xl font-bold">"You're on the list!"</h1>
+                        <p class="text-[#71717A] text-sm">"Thanks for signing up. We'll reach out when a spot opens up."</p>
+                        <a href="/" class="text-indigo-500 text-sm font-medium hover:underline">"Back to home"</a>
+                    </div>
+                </div>
+            </PageShell>
+        </Base>
+    }
+}
+
+pub async fn beta(Query(params): Query<BetaQuery>) -> Html<String> {
+    if params.success.unwrap_or(false) {
+        crate::web::render(BetaConfirmation())
+    } else {
+        crate::web::render(BetaInvite(BetaInviteProps { error: params.error }))
+    }
 }

@@ -1,9 +1,10 @@
-use super::components::*;
+use crate::web::components::*;
 use axum::response::Html;
+use axum_extra::extract::cookie::SignedCookieJar;
 use leptos::prelude::*;
 
 #[component]
-fn Landing() -> impl IntoView {
+fn Landing(logged_in: bool) -> impl IntoView {
     view! {
         <Base title="cocompute">
             <PageShell>
@@ -12,10 +13,20 @@ fn Landing() -> impl IntoView {
                 <nav class="flex items-center justify-between px-6 py-4">
                     <span class="text-white font-bold text-lg">"cocompute"</span>
                     <div class="flex items-center gap-5">
-                        <a href="/login" class="text-[#A1A1AA] text-sm font-medium hover:text-white transition">"Log in"</a>
-                        <a href="/beta" class="rounded-lg bg-indigo-500 px-5 py-2.5 text-white text-sm font-semibold hover:bg-indigo-600 transition">
-                            "Request Beta Invite"
-                        </a>
+                        {if logged_in {
+                            view! {
+                                <a href="/dashboard" class="rounded-lg bg-indigo-500 px-5 py-2.5 text-white text-sm font-semibold hover:bg-indigo-600 transition">
+                                    "Dashboard"
+                                </a>
+                            }.into_any()
+                        } else {
+                            view! {
+                                <a href="/login" class="text-[#A1A1AA] text-sm font-medium hover:text-white transition">"Log in"</a>
+                                <a href="/beta" class="hidden md:inline-block rounded-lg bg-indigo-500 px-5 py-2.5 text-white text-sm font-semibold hover:bg-indigo-600 transition">
+                                    "Request Beta Invite"
+                                </a>
+                            }.into_any()
+                        }}
                     </div>
                 </nav>
 
@@ -33,41 +44,22 @@ fn Landing() -> impl IntoView {
                         </a>
                     </div>
 
-                    // ── Flow diagram ──
-                    <div class="mt-12 flex flex-col items-center gap-5 w-full max-w-2xl">
-                        <div class="flex items-center justify-center gap-0 w-full">
-                            // Client
-                            <div class="flex flex-col items-center gap-2 rounded-xl bg-[#16161E] border border-[#27272A] px-6 py-5 w-28">
-                                <Icon name="monitor" class="w-7 h-7 text-[#A1A1AA]"/>
-                                <span class="text-white text-sm font-semibold">"Client"</span>
-                            </div>
-                            // Arrow 1
-                            <div class="flex flex-col items-center px-3">
-                                <span class="text-[#52525B] font-mono text-[10px]">"request"</span>
-                                <Icon name="arrow-right" class="w-5 h-5 text-indigo-500"/>
-                            </div>
-                            // Orchestrator
-                            <div class="flex flex-col items-center gap-2 rounded-xl bg-[#16161E] border-2 border-indigo-500 px-6 py-5 w-36">
-                                <Icon name="server" class="w-7 h-7 text-indigo-500"/>
-                                <span class="text-white text-sm font-semibold">"Orchestrator"</span>
-                                <span class="text-indigo-500 font-mono text-[11px]">"cocompute"</span>
-                            </div>
-                            // Arrow 2
-                            <div class="flex flex-col items-center px-3">
-                                <span class="text-[#52525B] font-mono text-[10px]">"route"</span>
-                                <Icon name="arrow-right" class="w-5 h-5 text-indigo-500"/>
-                            </div>
-                            // Host GPU
-                            <div class="flex flex-col items-center gap-2 rounded-xl bg-[#16161E] border border-[#27272A] px-6 py-5 w-28">
-                                <Icon name="cpu" class="w-7 h-7 text-emerald-500"/>
-                                <span class="text-white text-sm text-center font-semibold">"Host GPU"</span>
-                            </div>
-                        </div>
-                        <p class="text-[#3F3F46] font-mono text-[11px]">"← response ←"</p>
-                        <p class="text-[#52525B] text-[13px] text-center">
-                            "Your request is routed through cocompute to the nearest available GPU"
-                        </p>
+                    // ── Network animation ──
+                    <div
+                        id="network-sc"
+                        class="mt-12 w-full max-w-4xl rounded-2xl overflow-hidden max-sm:aspect-auto max-sm:min-h-[720px]"
+                        style="position:relative;aspect-ratio:2.1/1;min-height:460px"
+                    >
+                        <canvas
+                            id="network-cv"
+                            style="position:absolute;top:0;left:0;width:100%;height:100%"
+                        />
+                        <div
+                            id="network-ui"
+                            style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif"
+                        />
                     </div>
+                    <script src={crate::web::asset_hash::JS_NETWORK.url()} defer></script>
                 </section>
 
                 // ── How it works ──
@@ -160,6 +152,7 @@ fn Landing() -> impl IntoView {
     }
 }
 
-pub async fn landing() -> Html<String> {
-    super::render(Landing())
+pub async fn landing(jar: SignedCookieJar) -> Html<String> {
+    let logged_in = jar.get(crate::auth::SESSION_COOKIE).is_some();
+    crate::web::render(Landing(LandingProps { logged_in }))
 }

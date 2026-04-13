@@ -15,6 +15,7 @@ pub struct Model {
     pub iroh_rtt_ms: Option<f64>,
     pub created_at: DateTimeUtc,
     pub api_key_id: Option<i32>,
+    pub pool_id: Option<i32>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

@@ -8,6 +8,9 @@ pub struct Model {
     #[sea_orm(unique)]
     pub key_hash: String,
     pub created_at: DateTimeUtc,
+    pub user_id: Option<i32>,
+    pub pool_id: Option<i32>,
+    pub label: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

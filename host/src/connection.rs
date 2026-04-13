@@ -40,7 +40,9 @@ pub(crate) async fn discover_capabilities(ollama: &Ollama) -> anyhow::Result<Cap
         tracing::debug!("  - {}", m.name);
     }
 
-    Ok(Capabilities { models: model_infos })
+    Ok(Capabilities {
+        models: model_infos,
+    })
 }
 
 /// Fetch the orchestrator's endpoint ID from its HTTP API.
@@ -64,6 +66,8 @@ pub(crate) async fn connect_and_serve(
     endpoint: &iroh::Endpoint,
     orchestrator_id: &str,
     ollama: Ollama,
+    setup_token: Option<String>,
+    host_id: String,
 ) -> anyhow::Result<()> {
     let orch_id = iroh::EndpointId::from_str(orchestrator_id)
         .map_err(|e| anyhow::anyhow!("invalid orchestrator id: {e}"))?;
@@ -75,13 +79,14 @@ pub(crate) async fn connect_and_serve(
 
     // Step 1: Register with capabilities
     let capabilities = discover_capabilities(&ollama).await?;
-    let mut initial_models: Vec<String> = capabilities
-        .models
-        .iter()
-        .map(|m| m.name.clone())
-        .collect();
+    let mut initial_models: Vec<String> =
+        capabilities.models.iter().map(|m| m.name.clone()).collect();
     initial_models.sort();
-    let reg_request = Request::Registry(RegistryRequest::Register(capabilities));
+    let reg_request = Request::Registry(RegistryRequest::Register {
+        capabilities,
+        host_id: host_id.clone(),
+        setup_token,
+    });
 
     let (send, recv) = conn.open_bi().await?;
     write_p2p(send, reg_request).await?;
@@ -126,11 +131,13 @@ pub(crate) async fn connect_and_serve(
                         new_caps.models.iter().map(|m| m.name.clone()).collect();
                     new_models.sort();
                     if new_models != last_models {
-                        tracing::info!(
-                            "model list changed, re-registering with orchestrator"
-                        );
+                        tracing::info!("model list changed, re-registering with orchestrator");
                         last_models = new_models;
-                        Request::Registry(RegistryRequest::Register(new_caps))
+                        Request::Registry(RegistryRequest::Register {
+                            capabilities: new_caps,
+                            host_id: host_id.clone(),
+                            setup_token: None,
+                        })
                     } else {
                         Request::Registry(RegistryRequest::Heartbeat)
                     }
@@ -143,9 +150,7 @@ pub(crate) async fn connect_and_serve(
                     Request::Registry(RegistryRequest::Heartbeat)
                 }
                 Err(_) => {
-                    tracing::warn!(
-                        "heartbeat: model discovery timed out after 5s (Ollama busy?)"
-                    );
+                    tracing::warn!("heartbeat: model discovery timed out after 5s (Ollama busy?)");
                     Request::Registry(RegistryRequest::Heartbeat)
                 }
             };

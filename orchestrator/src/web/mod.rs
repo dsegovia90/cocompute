@@ -1,17 +1,47 @@
-mod beta;
+pub mod asset_hash;
 mod components;
-mod landing;
-mod login;
+mod handlers;
+mod pages;
 
-use axum::{Router, response::Html, routing::get};
+use axum::{Router, response::Html, routing::{get, post}};
 use leptos::prelude::*;
 
 pub fn router(static_dir: &str) -> Router<crate::AppState> {
     Router::new()
-        .route("/", get(landing::landing))
-        .route("/beta", get(beta::beta))
-        .route("/login", get(login::login))
+        .route("/", get(pages::landing::landing))
+        .route("/beta", get(pages::beta::beta).post(handlers::post_beta))
+        .route("/login", get(pages::login::login).post(handlers::post_login))
+        .route("/logout", post(handlers::post_logout))
+        .route("/verify", get(pages::verify::verify_page).post(handlers::post_verify))
+        .route("/forgot", get(pages::forgot::forgot_page).post(handlers::post_forgot))
+        .route("/reset", get(pages::reset::reset_page).post(handlers::post_reset))
+        // Dashboard + pool management (authenticated)
+        .route("/dashboard", get(pages::dashboard::dashboard))
+        .route("/pools", post(handlers::create_pool))
+        .route("/host-token", post(handlers::create_host_token))
+        .route("/pools/{pool_pid}/rename", post(handlers::rename_pool))
+        .route("/pools/{pool_pid}/api-keys", post(handlers::create_pool_api_key))
+        .route("/pools/{pool_pid}/invite", post(handlers::invite_member))
+        .route("/pools/{pool_pid}/accept", get(handlers::accept_invite))
+        .route("/pools/{pool_pid}/add-host", post(handlers::add_host_to_pool))
+        .route("/api-keys/global", post(handlers::create_global_api_key))
+        .route("/install.sh", get(install_script))
         .nest_service("/static", tower_http::services::ServeDir::new(static_dir))
+}
+
+/// Serve install.sh with the base URL baked in.
+async fn install_script(
+    axum::extract::State(state): axum::extract::State<crate::AppState>,
+) -> axum::response::Response {
+    let script = include_str!("../../static/install.sh");
+    let script = script.replace(
+        r#"BASE_URL="${COCOMPUTE_URL:-}""#,
+        &format!(r#"BASE_URL="{}""#, state.base_url),
+    );
+    axum::response::Response::builder()
+        .header("content-type", "text/plain; charset=utf-8")
+        .body(axum::body::Body::from(script))
+        .unwrap()
 }
 
 pub fn render(view: impl IntoView) -> Html<String> {
