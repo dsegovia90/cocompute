@@ -14,7 +14,7 @@ use crate::{
 #[component]
 fn HostTokenPage(token: String, endpoint_id: String, base_url: String, is_dev: bool) -> impl IntoView {
     let curl_cmd = format!(
-        "curl -sSf {base_url}/install.sh | bash -s -- --token {token} --orchestrator {endpoint_id}"
+        "curl -sSf {base_url}/install.sh | bash -s -- --token {token}"
     );
     let cargo_cmd = format!(
         "cargo run -p cocompute_host -- --orchestrator-url {base_url} --setup-token {token}"

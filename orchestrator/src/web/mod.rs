@@ -25,7 +25,23 @@ pub fn router(static_dir: &str) -> Router<crate::AppState> {
         .route("/pools/{pool_pid}/accept", get(handlers::accept_invite))
         .route("/pools/{pool_pid}/add-host", post(handlers::add_host_to_pool))
         .route("/api-keys/global", post(handlers::create_global_api_key))
+        .route("/install.sh", get(install_script))
         .nest_service("/static", tower_http::services::ServeDir::new(static_dir))
+}
+
+/// Serve install.sh with the base URL baked in.
+async fn install_script(
+    axum::extract::State(state): axum::extract::State<crate::AppState>,
+) -> axum::response::Response {
+    let script = include_str!("../../static/install.sh");
+    let script = script.replace(
+        r#"BASE_URL="${COCOMPUTE_URL:-}""#,
+        &format!(r#"BASE_URL="{}""#, state.base_url),
+    );
+    axum::response::Response::builder()
+        .header("content-type", "text/plain; charset=utf-8")
+        .body(axum::body::Body::from(script))
+        .unwrap()
 }
 
 pub fn render(view: impl IntoView) -> Html<String> {
