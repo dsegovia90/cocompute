@@ -72,6 +72,16 @@ SERVICEEOF
     systemctl --user daemon-reload
     systemctl --user enable --now cocompute-host.service
 
+    # Enable lingering so the service keeps running after logout.
+    if ! loginctl show-user "$USER" 2>/dev/null | grep -q "Linger=yes"; then
+        echo "Enabling user lingering (requires sudo) so the host stays online after logout..."
+        if sudo loginctl enable-linger "$USER"; then
+            echo "  Lingering enabled for $USER."
+        else
+            echo "  WARNING: could not enable lingering. Run manually: sudo loginctl enable-linger $USER"
+        fi
+    fi
+
     echo ""
     echo "Service installed and started."
     echo "  Status:  systemctl --user status cocompute-host"

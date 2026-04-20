@@ -10,3 +10,4 @@ context.md
 node_modules
 .env
 orchestrator/static/output.css
+.context
