@@ -12,6 +12,8 @@ mod m20260412_000004_create_host_pool_memberships;
 mod m20260412_000005_add_user_pool_to_api_keys;
 mod m20260412_000006_add_user_to_hosts;
 mod m20260412_000007_add_pool_id_to_metering_logs;
+mod m20260420_000001_add_name_to_hosts;
+mod m20260420_000002_add_is_active;
 
 use sea_orm_migration::prelude::*;
 
@@ -35,6 +37,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20260412_000005_add_user_pool_to_api_keys::M20260412AddUserPoolToApiKeys),
             Box::new(m20260412_000006_add_user_to_hosts::M20260412AddUserToHosts),
             Box::new(m20260412_000007_add_pool_id_to_metering_logs::M20260412AddPoolIdToMeteringLogs),
+            Box::new(m20260420_000001_add_name_to_hosts::M20260420AddNameToHosts),
+            Box::new(m20260420_000002_add_is_active::M20260420AddIsActive),
         ]
     }
 }

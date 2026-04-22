@@ -1,7 +1,8 @@
-use crate::web::components::*;
 use axum::response::Html;
 use axum_extra::extract::cookie::SignedCookieJar;
 use leptos::prelude::*;
+
+use crate::web::components::*;
 
 #[component]
 fn Landing(logged_in: bool) -> impl IntoView {
@@ -60,6 +61,27 @@ fn Landing(logged_in: bool) -> impl IntoView {
                         />
                     </div>
                     <script src={crate::web::asset_hash::JS_NETWORK.url()} defer></script>
+                </section>
+
+                // ── Two-sided value prop ──
+                <section class="px-6 py-16 flex flex-col items-center">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl w-full">
+                        <div class="rounded-xl bg-[#16161E] border border-[#27272A] p-8">
+                            <h3 class="text-emerald-400 text-lg font-bold mb-2">"Have a GPU?"</h3>
+                            <p class="text-[#A1A1AA] text-sm leading-relaxed">
+                                "Share your idle 3060, 3090, or 4090 with the pool. One command to install, runs as a background service. In return, get access to every GPU in the network."
+                            </p>
+                        </div>
+                        <div class="rounded-xl bg-[#16161E] border border-[#27272A] p-8">
+                            <h3 class="text-indigo-400 text-lg font-bold mb-2">"Need inference?"</h3>
+                            <p class="text-[#A1A1AA] text-sm leading-relaxed">
+                                "Point your apps at cocompute's OpenAI-compatible API. Access GPUs shared by others without buying hardware or paying cloud prices."
+                            </p>
+                        </div>
+                    </div>
+                    <a href="/quickstart" class="mt-8 text-indigo-400 text-sm font-medium hover:underline">
+                        "Get started in 60 seconds →"
+                    </a>
                 </section>
 
                 // ── How it works ──

@@ -11,7 +11,7 @@ use fake::faker::lorem::en::Word;
 
 use crate::{
     auth::CurrentUser,
-    db::entities::{pool_members, pools},
+    db::entities::{api_keys, host_pool_memberships, pool_members, pools},
     AppState,
 };
 
@@ -57,7 +57,7 @@ pub async fn create_pool(
     };
     let _ = member.insert(&state.db).await;
 
-    Redirect::to("/dashboard").into_response()
+    Redirect::to(&format!("/dashboard?saved=true#pool-{}", pool.pid)).into_response()
 }
 
 #[derive(Deserialize)]
@@ -261,6 +261,7 @@ pub async fn add_host_to_pool(
     // Update in-memory HostManager
     let all_memberships = host_pool_memberships::Entity::find()
         .filter(host_pool_memberships::Column::HostEndpointId.eq(&form.host_id))
+        .filter(host_pool_memberships::Column::IsActive.eq(true))
         .all(&state.db)
         .await
         .unwrap_or_default();
@@ -268,4 +269,130 @@ pub async fn add_host_to_pool(
     state.hosts.update_pool_ids(&form.host_id, pool_ids).await;
 
     Redirect::to("/dashboard").into_response()
+}
+
+/// Deactivate a pool (soft delete). Requires pool ownership.
+pub async fn deactivate_pool(
+    State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
+    axum::extract::Path(pool_pid): axum::extract::Path<String>,
+) -> Response {
+    let pool = pools::Entity::find()
+        .filter(pools::Column::Pid.eq(&pool_pid))
+        .one(&state.db)
+        .await;
+
+    let pool = match pool {
+        Ok(Some(p)) if p.owner_id == user.id => p,
+        _ => return Redirect::to("/dashboard").into_response(),
+    };
+
+    let mut active: pools::ActiveModel = pool.into();
+    active.is_active = Set(false);
+    let _ = active.update(&state.db).await;
+
+    Redirect::to("/dashboard?saved=true").into_response()
+}
+
+/// Reactivate a pool.
+pub async fn reactivate_pool(
+    State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
+    axum::extract::Path(pool_pid): axum::extract::Path<String>,
+) -> Response {
+    let pool = pools::Entity::find()
+        .filter(pools::Column::Pid.eq(&pool_pid))
+        .one(&state.db)
+        .await;
+
+    let pool = match pool {
+        Ok(Some(p)) if p.owner_id == user.id => p,
+        _ => return Redirect::to("/dashboard").into_response(),
+    };
+
+    let mut active: pools::ActiveModel = pool.into();
+    active.is_active = Set(true);
+    let _ = active.update(&state.db).await;
+
+    Redirect::to("/dashboard?saved=true").into_response()
+}
+
+/// Deactivate an API key (soft delete). Requires key ownership.
+pub async fn deactivate_api_key(
+    State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
+    axum::extract::Path(key_id): axum::extract::Path<i32>,
+) -> Response {
+    let key = api_keys::Entity::find_by_id(key_id)
+        .one(&state.db)
+        .await;
+
+    let key = match key {
+        Ok(Some(k)) if k.user_id == Some(user.id) => k,
+        _ => return Redirect::to("/dashboard").into_response(),
+    };
+
+    let mut active: api_keys::ActiveModel = key.into();
+    active.is_active = Set(false);
+    let _ = active.update(&state.db).await;
+
+    Redirect::to("/dashboard?saved=true").into_response()
+}
+
+/// Remove a host from a pool (deactivate membership).
+pub async fn remove_host_from_pool(
+    State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
+    axum::extract::Path((pool_pid, host_endpoint_id)): axum::extract::Path<(String, String)>,
+) -> Response {
+    use crate::db::entities::hosts;
+
+    // Find pool
+    let pool = pools::Entity::find()
+        .filter(pools::Column::Pid.eq(&pool_pid))
+        .one(&state.db)
+        .await;
+
+    let pool = match pool {
+        Ok(Some(p)) => p,
+        _ => return Redirect::to("/dashboard").into_response(),
+    };
+
+    // Allow if user owns the pool OR owns the host
+    let is_pool_owner = pool.owner_id == user.id;
+    let host = hosts::Entity::find()
+        .filter(hosts::Column::EndpointId.eq(&host_endpoint_id))
+        .one(&state.db)
+        .await;
+    let is_host_owner = matches!(&host, Ok(Some(h)) if h.user_id == Some(user.id));
+
+    if !is_pool_owner && !is_host_owner {
+        return Redirect::to("/dashboard").into_response();
+    }
+
+    // Deactivate the membership
+    let membership = host_pool_memberships::Entity::find()
+        .filter(host_pool_memberships::Column::PoolId.eq(pool.id))
+        .filter(host_pool_memberships::Column::HostEndpointId.eq(&host_endpoint_id))
+        .filter(host_pool_memberships::Column::IsActive.eq(true))
+        .one(&state.db)
+        .await;
+
+    if let Ok(Some(m)) = membership {
+        let mut active: host_pool_memberships::ActiveModel = m.into();
+        active.is_active = Set(false);
+        let _ = active.update(&state.db).await;
+    }
+
+    // Update in-memory HostManager
+    let active_memberships = host_pool_memberships::Entity::find()
+        .filter(host_pool_memberships::Column::HostEndpointId.eq(&host_endpoint_id))
+        .filter(host_pool_memberships::Column::IsActive.eq(true))
+        .all(&state.db)
+        .await
+        .unwrap_or_default();
+    let pool_ids: Vec<i32> = active_memberships.iter().map(|m| m.pool_id).collect();
+    state.hosts.update_pool_ids(&host_endpoint_id, pool_ids).await;
+
+    Redirect::to("/dashboard?saved=true").into_response()
 }

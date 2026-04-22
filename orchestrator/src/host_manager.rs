@@ -219,7 +219,7 @@ mod tests {
         ).await;
 
         // Both models available
-        let mut models = mgr.available_models().await;
+        let mut models = mgr.available_models(None).await;
         models.sort();
         models.dedup();
         assert_eq!(models, vec!["llama3:latest", "mxbai-embed-large:latest"]);
@@ -260,7 +260,7 @@ mod tests {
 
         // Model gone
         assert!(mgr.find_host_for_model("llama3:latest", None).await.is_none());
-        assert!(mgr.available_models().await.is_empty());
+        assert!(mgr.available_models(None).await.is_empty());
     }
 
     #[tokio::test]

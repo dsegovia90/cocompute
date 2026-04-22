@@ -63,6 +63,7 @@ pub async fn require_api_key(
 
     let exists = api_keys::Entity::find()
         .filter(api_keys::Column::KeyHash.eq(&key_hash))
+        .filter(api_keys::Column::IsActive.eq(true))
         .one(&db)
         .await
         .map_err(|e| AppError::Internal(anyhow::anyhow!("db error: {e}")))?;

@@ -11,6 +11,7 @@ pub struct Model {
     pub user_id: Option<i32>,
     pub pool_id: Option<i32>,
     pub label: Option<String>,
+    pub is_active: bool,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

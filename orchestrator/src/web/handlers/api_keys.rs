@@ -160,3 +160,34 @@ pub async fn create_global_api_key(
         label: label.unwrap_or_default(),
     })).0).into_response()
 }
+
+#[derive(Deserialize)]
+pub struct RenameApiKeyForm {
+    pub label: String,
+}
+
+/// Rename an API key. Requires key ownership.
+pub async fn rename_api_key(
+    State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
+    axum::extract::Path(key_id): axum::extract::Path<i32>,
+    Form(form): Form<RenameApiKeyForm>,
+) -> Response {
+    let key = api_keys::Entity::find_by_id(key_id)
+        .one(&state.db)
+        .await;
+
+    let key = match key {
+        Ok(Some(k)) if k.user_id == Some(user.id) => k,
+        _ => return Redirect::to("/dashboard").into_response(),
+    };
+
+    let label = form.label.trim().to_string();
+    let label = if label.is_empty() || label == "unnamed" { None } else { Some(label) };
+
+    let mut active: api_keys::ActiveModel = key.into();
+    active.label = Set(label);
+    let _ = active.update(&state.db).await;
+
+    Redirect::to("/dashboard?saved=true").into_response()
+}

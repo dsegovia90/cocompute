@@ -8,6 +8,7 @@ pub struct Model {
     pub host_endpoint_id: String,
     pub pool_id: i32,
     pub created_at: DateTimeUtc,
+    pub is_active: bool,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

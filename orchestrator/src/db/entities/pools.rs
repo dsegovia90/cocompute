@@ -11,6 +11,7 @@ pub struct Model {
     pub owner_id: i32,
     pub is_global: bool,
     pub created_at: DateTimeUtc,
+    pub is_active: bool,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

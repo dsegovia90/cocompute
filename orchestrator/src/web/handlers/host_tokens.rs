@@ -1,12 +1,15 @@
 use axum::{
     extract::State,
     response::{Html, IntoResponse, Redirect, Response},
+    Form,
 };
 use leptos::prelude::*;
-use sea_orm::{ActiveModelTrait, Set};
+use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
+use serde::Deserialize;
 
 use crate::{
     auth::{self, CurrentUser},
+    db::entities::hosts,
     web::components::*,
     AppState,
 };
@@ -121,4 +124,36 @@ pub async fn create_host_token(
         base_url: state.base_url.clone(),
         is_dev: cfg!(debug_assertions),
     })).0).into_response()
+}
+
+#[derive(Deserialize)]
+pub struct RenameHostForm {
+    pub name: String,
+}
+
+/// Rename a host. Requires host ownership.
+pub async fn rename_host(
+    State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
+    axum::extract::Path(endpoint_id): axum::extract::Path<String>,
+    Form(form): Form<RenameHostForm>,
+) -> Response {
+    let host = hosts::Entity::find()
+        .filter(hosts::Column::EndpointId.eq(&endpoint_id))
+        .one(&state.db)
+        .await;
+
+    let host = match host {
+        Ok(Some(h)) if h.user_id == Some(user.id) => h,
+        _ => return Redirect::to("/dashboard").into_response(),
+    };
+
+    let name = form.name.trim().to_string();
+    let name = if name.is_empty() { None } else { Some(name) };
+
+    let mut active: hosts::ActiveModel = host.into();
+    active.name = Set(name);
+    let _ = active.update(&state.db).await;
+
+    Redirect::to("/dashboard?saved=true").into_response()
 }

@@ -75,14 +75,29 @@ fn Dashboard(
                                         } else {
                                             host.pool_names.join(", ")
                                         };
+                                        let id_short = format!("{}...{}", &host.id_prefix, &host.id_suffix);
+                                        let display_name = match host.name.clone() {
+                                            Some(name) => format!("{} ({})", name, id_short),
+                                            None => id_short,
+                                        };
+                                        let host_id = host.host_id.clone();
                                         view! {
-                                            <div class="flex items-center justify-between bg-[#111118] rounded-lg px-4 py-3">
-                                                <div class="flex items-center gap-3">
-                                                    <span class={format!("w-2 h-2 rounded-full {status_dot}")}></span>
-                                                    <span class="text-[#A1A1AA] text-sm font-mono">{format!("{}...{}", &host.id_prefix, &host.id_suffix)}</span>
-                                                    <span class={format!("text-xs {status_color}")}>{status_text}</span>
+                                            <div class="flex items-center justify-between bg-[#111118] rounded-lg px-4 py-3 gap-3">
+                                                <div class="flex items-center gap-3 min-w-0">
+                                                    <span class={format!("w-2 h-2 rounded-full shrink-0 {status_dot}")}></span>
+                                                    <form method="POST" action={format!("/hosts/{}/rename", host_id)} class="inline min-w-0">
+                                                        <span
+                                                            contenteditable="true"
+                                                            data-original={display_name.clone()}
+                                                            class="text-[#A1A1AA] text-sm font-mono outline-none cursor-text rounded px-1 -mx-1 hover:bg-[#1e1e2e] focus:bg-[#1e1e2e] focus:ring-1 focus:ring-indigo-500 block truncate max-w-[240px]"
+                                                            onblur="var v=this.textContent.trim();if(v!==this.dataset.original){this.parentElement.querySelector('input[name=name]').value=v;this.parentElement.submit()}"
+                                                            onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur()}"
+                                                        >{display_name.clone()}</span>
+                                                        <input type="hidden" name="name" value=""/>
+                                                    </form>
+                                                    <span class={format!("text-xs shrink-0 {status_color}")}>{status_text}</span>
                                                 </div>
-                                                <div class="flex items-center gap-3">
+                                                <div class="flex items-center gap-3 shrink-0">
                                                     <span class="text-[#52525B] text-xs">{pools_text}</span>
                                                 </div>
                                             </div>
@@ -106,30 +121,46 @@ fn Dashboard(
                         view! {
                             <div class="flex flex-col gap-6">
                                 {user_pools.into_iter().map(|pool| view! {
-                                    <div class="rounded-xl bg-[#16161E] border border-[#27272A] p-6">
+                                    <div id={format!("pool-{}", pool.pid)} class="rounded-xl bg-[#16161E] border border-[#27272A] p-6">
                                         <div class="flex items-center justify-between mb-4">
                                             <div>
                                                 <form method="POST" action={format!("/pools/{}/rename", pool.pid)} class="inline">
                                                     <h2
                                                         contenteditable="true"
+                                                        data-original={pool.name.clone()}
                                                         class="text-white text-lg font-bold outline-none cursor-text rounded px-1 -mx-1 hover:bg-[#1e1e2e] focus:bg-[#1e1e2e] focus:ring-1 focus:ring-indigo-500"
-                                                        onblur="this.parentElement.querySelector('input[name=name]').value=this.textContent.trim();this.parentElement.submit()"
+                                                        onblur="var v=this.textContent.trim();if(v!==this.dataset.original){this.parentElement.querySelector('input[name=name]').value=v;this.parentElement.submit()}"
                                                         onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur()}"
                                                     >{pool.name.clone()}</h2>
                                                     <input type="hidden" name="name" value={pool.name.clone()}/>
                                                 </form>
                                                 <p class="text-[#52525B] text-xs mt-0.5">{format!("{} hosts · {} keys", pool.hosts.len(), pool.key_count)}</p>
                                             </div>
-                                            <form method="POST" action={format!("/pools/{}/api-keys", pool.pid)}>
-                                                <input type="hidden" name="label" value=""/>
-                                                <button type="submit" class="rounded-lg bg-[#27272A] px-3 py-1.5 text-[#A1A1AA] text-xs font-medium hover:text-white transition cursor-pointer">
-                                                    "New API Key"
-                                                </button>
-                                            </form>
+                                            <div class="flex items-center gap-2">
+                                                <form method="POST" action={format!("/pools/{}/api-keys", pool.pid)}>
+                                                    <input type="hidden" name="label" value=""/>
+                                                    <button type="submit" class="rounded-lg bg-[#27272A] px-3 py-1.5 text-[#A1A1AA] text-xs font-medium hover:text-white transition cursor-pointer">
+                                                        "New API Key"
+                                                    </button>
+                                                </form>
+                                                {if pool.is_owner {
+                                                    let deact_pid = pool.pid.clone();
+                                                    view! {
+                                                        <form method="POST" action={format!("/pools/{}/deactivate", deact_pid)}>
+                                                            <button type="submit" class="rounded-lg bg-[#27272A] px-3 py-1.5 text-[#52525B] text-xs font-medium hover:text-red-400 transition cursor-pointer" onclick="return confirm('Deactivate this pool?')">
+                                                                "Deactivate"
+                                                            </button>
+                                                        </form>
+                                                    }.into_any()
+                                                } else {
+                                                    view! { <span></span> }.into_any()
+                                                }}
+                                            </div>
                                         </div>
 
                                         // Hosts in this pool
                                         {if !pool.hosts.is_empty() {
+                                            let hosts_pool_pid = pool.pid.clone();
                                             view! {
                                                 <div class="mb-4">
                                                     <h3 class="text-[#A1A1AA] text-xs font-medium mb-2">"Hosts"</h3>
@@ -137,15 +168,26 @@ fn Dashboard(
                                                         {pool.hosts.into_iter().map(|host| {
                                                             let status_color = if host.online { "text-emerald-400" } else { "text-[#52525B]" };
                                                             let status_dot = if host.online { "bg-emerald-400" } else { "bg-[#52525B]" };
+                                                            let remove_action = format!("/pools/{}/remove-host/{}", hosts_pool_pid, host.host_id);
+                                                            let id_short = format!("{}...{}", &host.id_prefix, &host.id_suffix);
+                                                            let host_display = match &host.name {
+                                                                Some(name) => format!("{} ({})", name, id_short),
+                                                                None => id_short,
+                                                            };
                                                             view! {
                                                                 <div class="flex items-center justify-between bg-[#111118] rounded-lg px-3 py-2">
                                                                     <div class="flex items-center gap-2">
                                                                         <span class={format!("w-2 h-2 rounded-full {status_dot}")}></span>
-                                                                        <span class="text-[#A1A1AA] text-xs font-mono">{format!("{}...{}", &host.id_prefix, &host.id_suffix)}</span>
+                                                                        <span class="text-[#A1A1AA] text-xs font-mono">{host_display}</span>
                                                                     </div>
                                                                     <div class="flex items-center gap-3">
                                                                         <span class="text-[#52525B] text-xs">{host.owner_name}</span>
                                                                         <span class={format!("text-xs {status_color}")}>{if host.online { "online" } else { "offline" }}</span>
+                                                                        <form method="POST" action={remove_action}>
+                                                                            <button type="submit" class="text-[#3F3F46] text-xs hover:text-red-400 transition cursor-pointer" onclick="return confirm('Remove host from pool?')">
+                                                                                "remove"
+                                                                            </button>
+                                                                        </form>
                                                                     </div>
                                                                 </div>
                                                             }
@@ -181,7 +223,11 @@ fn Dashboard(
                                                     </form>
                                                 }.into_any()
                                             } else {
-                                                view! { <div></div> }.into_any()
+                                                view! {
+                                                    <p class="text-[#3F3F46] text-xs mb-4 italic">
+                                                        "No hosts available to add. Register a host first."
+                                                    </p>
+                                                }.into_any()
                                             }
                                         }
 
@@ -233,12 +279,35 @@ fn Dashboard(
                                                 <div>
                                                     <h3 class="text-[#A1A1AA] text-xs font-medium mb-2">"API Keys"</h3>
                                                     <div class="flex flex-col gap-1">
-                                                        {pool.api_keys.into_iter().map(|key| view! {
-                                                            <div class="flex items-center justify-between bg-[#111118] rounded-lg px-3 py-2">
-                                                                <span class="text-[#A1A1AA] text-xs font-mono">{format!("{}...{}", &key.hash_prefix, &key.hash_suffix)}</span>
-                                                                <span class="text-[#3F3F46] text-xs">{key.label.unwrap_or_default()}</span>
+                                                        {pool.api_keys.into_iter().map(|key| {
+                                                            let hash_short = format!("{}...{}", &key.hash_prefix, &key.hash_suffix);
+                                                            let label_display = key.label.clone().unwrap_or_else(|| "unnamed".to_string());
+                                                            let key_display = match &key.label {
+                                                                Some(_) => format!(" ({})", hash_short),
+                                                                None => format!(" {}", hash_short),
+                                                            };
+                                                            view! {
+                                                            <div class="flex items-center justify-between bg-[#111118] rounded-lg px-3 py-2 gap-3">
+                                                                <div class="flex items-center gap-0 min-w-0">
+                                                                    <form method="POST" action={format!("/api-keys/{}/rename", key.id)} class="inline min-w-0">
+                                                                        <span
+                                                                            contenteditable="true"
+                                                                            data-original={label_display.clone()}
+                                                                            class="text-[#A1A1AA] text-xs outline-none cursor-text rounded px-1 hover:bg-[#1e1e2e] focus:bg-[#1e1e2e] focus:ring-1 focus:ring-indigo-500 block truncate max-w-[200px]"
+                                                                            onblur="var v=this.textContent.trim();if(v!==this.dataset.original){this.parentElement.querySelector('input[name=label]').value=v;this.parentElement.submit()}"
+                                                                            onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur()}"
+                                                                        >{label_display.clone()}</span>
+                                                                        <input type="hidden" name="label" value=""/>
+                                                                    </form>
+                                                                    <span class="text-[#52525B] text-xs font-mono shrink-0">{key_display}</span>
+                                                                </div>
+                                                                <form method="POST" action={format!("/api-keys/{}/deactivate", key.id)}>
+                                                                    <button type="submit" class="text-[#52525B] text-xs hover:text-red-400 transition cursor-pointer" onclick="return confirm('Deactivate this API key?')">
+                                                                        "revoke"
+                                                                    </button>
+                                                                </form>
                                                             </div>
-                                                        }).collect::<Vec<_>>()}
+                                                        }}).collect::<Vec<_>>()}
                                                     </div>
                                                 </div>
                                             }.into_any()
@@ -277,6 +346,7 @@ struct HostView {
     host_id: String,
     id_prefix: String,
     id_suffix: String,
+    name: Option<String>,
     owner_name: String,
     online: bool,
 }
@@ -286,12 +356,14 @@ struct OwnedHostView {
     host_id: String,
     id_prefix: String,
     id_suffix: String,
+    name: Option<String>,
     online: bool,
     pool_names: Vec<String>,
 }
 
 #[derive(Clone)]
 struct ApiKeyView {
+    id: i32,
     hash_prefix: String,
     hash_suffix: String,
     label: Option<String>,
@@ -340,6 +412,10 @@ pub async fn dashboard(
         .iter()
         .map(|h| (h.endpoint_id.clone(), h.user_id))
         .collect();
+    let host_name_map: std::collections::HashMap<String, Option<String>> = all_hosts
+        .iter()
+        .map(|h| (h.endpoint_id.clone(), h.name.clone()))
+        .collect();
 
     let mut owned_hosts = Vec::new();
     for host in &owned_host_records {
@@ -361,6 +437,7 @@ pub async fn dashboard(
             host_id: hid.clone(),
             id_prefix: hid.chars().take(8).collect(),
             id_suffix: hid.chars().rev().take(4).collect::<String>().chars().rev().collect(),
+            name: host.name.clone(),
             online: connected.contains(hid),
             pool_names,
         });
@@ -384,13 +461,14 @@ pub async fn dashboard(
             .flatten();
 
         let pool = match pool {
-            Some(p) => p,
-            None => continue,
+            Some(p) if p.is_active => p,
+            _ => continue,
         };
 
-        // Get hosts in this pool with their owners
+        // Get hosts in this pool with their owners (active memberships only)
         let pool_host_memberships = host_pool_memberships::Entity::find()
             .filter(host_pool_memberships::Column::PoolId.eq(*pool_id))
+            .filter(host_pool_memberships::Column::IsActive.eq(true))
             .all(&state.db)
             .await
             .unwrap_or_default();
@@ -408,15 +486,17 @@ pub async fn dashboard(
                     host_id: host_id.clone(),
                     id_prefix: host_id.chars().take(8).collect(),
                     id_suffix: host_id.chars().rev().take(4).collect::<String>().chars().rev().collect(),
+                    name: host_name_map.get(host_id).cloned().flatten(),
                     owner_name,
                     online: connected.contains(host_id),
                 }
             })
             .collect();
 
-        // Get API keys for this pool
+        // Get API keys for this pool (active only)
         let keys = api_keys::Entity::find()
             .filter(api_keys::Column::PoolId.eq(Some(*pool_id)))
+            .filter(api_keys::Column::IsActive.eq(true))
             .all(&state.db)
             .await
             .unwrap_or_default();
@@ -426,6 +506,7 @@ pub async fn dashboard(
             .map(|k| {
                 let hash = &k.key_hash;
                 ApiKeyView {
+                    id: k.id,
                     hash_prefix: hash.chars().take(8).collect(),
                     hash_suffix: hash.chars().rev().take(4).collect::<String>().chars().rev().collect(),
                     label: k.label.clone(),
@@ -471,7 +552,9 @@ pub async fn dashboard(
         .iter()
         .map(|h| {
             let hid = &h.endpoint_id;
-            let label = format!("{}...{}", &hid[..8.min(hid.len())], &hid[hid.len().saturating_sub(4)..]);
+            let label = h.name.clone().unwrap_or_else(|| {
+                format!("{}...{}", &hid[..8.min(hid.len())], &hid[hid.len().saturating_sub(4)..])
+            });
             (hid.clone(), label)
         })
         .collect();

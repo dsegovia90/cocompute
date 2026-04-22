@@ -77,28 +77,32 @@ fn chat_response_roundtrip() {
 
 #[test]
 fn registry_register_roundtrip() {
-    let req = RegistryRequest::Register(Capabilities {
-        models: vec![
-            ModelInfo {
-                name: "mxbai-embed-large:latest".into(),
-                quantization: "f16".into(),
-                vram_mb: 2048,
-                ram_mb: 4096,
-            },
-            ModelInfo {
-                name: "llama3:latest".into(),
-                quantization: "q4_0".into(),
-                vram_mb: 8192,
-                ram_mb: 16384,
-            },
-        ],
-    });
+    let req = RegistryRequest::Register {
+        capabilities: Capabilities {
+            models: vec![
+                ModelInfo {
+                    name: "mxbai-embed-large:latest".into(),
+                    quantization: "f16".into(),
+                    vram_mb: 2048,
+                    ram_mb: 4096,
+                },
+                ModelInfo {
+                    name: "llama3:latest".into(),
+                    quantization: "q4_0".into(),
+                    vram_mb: 8192,
+                    ram_mb: 16384,
+                },
+            ],
+        },
+        host_id: "test-host-001".into(),
+        setup_token: None,
+    };
     let decoded: RegistryRequest = roundtrip(&req);
     match decoded {
-        RegistryRequest::Register(caps) => {
-            assert_eq!(caps.models.len(), 2);
-            assert_eq!(caps.models[0].name, "mxbai-embed-large:latest");
-            assert_eq!(caps.models[1].vram_mb, 8192);
+        RegistryRequest::Register { capabilities, .. } => {
+            assert_eq!(capabilities.models.len(), 2);
+            assert_eq!(capabilities.models[0].name, "mxbai-embed-large:latest");
+            assert_eq!(capabilities.models[1].vram_mb, 8192);
         }
         _ => panic!("expected Register variant"),
     }

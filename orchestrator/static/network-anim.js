@@ -180,8 +180,8 @@ function renderCards(){
   var hd=document.createElement('div');
   hd.style.cssText='position:absolute;left:'+hb.x+'px;top:'+hb.y+'px;width:'+hb.w+'px;height:'+hb.h+'px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px';
   hd.innerHTML='<div style="color:#a78bfa">'+svgServer+'</div>'
-    +'<div style="font-size:14px;font-weight:700;color:rgba(255,255,255,0.95);letter-spacing:0.02em">Orchestrator</div>'
-    +'<div style="font-size:10px;font-weight:400;color:#a78bfa;opacity:0.55">cocompute</div>';
+    +'<div style="font-size:14px;font-weight:700;color:rgba(255,255,255,0.95);letter-spacing:0.02em">cocompute</div>'
+    +'<div style="font-size:10px;font-weight:400;color:#a78bfa;opacity:0.55">orchestrator</div>';
   ui.appendChild(hd);
 }
 
