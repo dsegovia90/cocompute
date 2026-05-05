@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
 use axum::{
     extract::State,
     response::{IntoResponse, Redirect, Response},
@@ -87,7 +89,10 @@ pub async fn rename_pool(
     if !name.is_empty() && name != pool.name {
         let mut active: pools::ActiveModel = pool.into();
         active.name = Set(name);
-        let _ = active.update(&state.db).await;
+        if let Err(e) = active.update(&state.db).await {
+            tracing::error!("failed to rename pool: {e}");
+            return Redirect::to("/dashboard?error=update_failed").into_response();
+        }
     }
 
     Redirect::to("/dashboard?saved=true").into_response()
@@ -194,7 +199,10 @@ pub async fn accept_invite(
         if m.accepted_at.is_none() {
             let mut active: pool_members::ActiveModel = m.into();
             active.accepted_at = Set(Some(chrono::Utc::now()));
-            let _ = active.update(&state.db).await;
+            if let Err(e) = active.update(&state.db).await {
+                tracing::error!("failed to accept pool invite: {e}");
+                return Redirect::to("/dashboard?error=update_failed").into_response();
+            }
         }
     }
 
@@ -316,7 +324,10 @@ pub async fn deactivate_pool(
 
     let mut active: pools::ActiveModel = pool.into();
     active.is_active = Set(false);
-    let _ = active.update(&state.db).await;
+    if let Err(e) = active.update(&state.db).await {
+        tracing::error!("failed to deactivate pool: {e}");
+        return Redirect::to("/dashboard?error=update_failed").into_response();
+    }
 
     Redirect::to("/dashboard?saved=true").into_response()
 }
@@ -339,7 +350,10 @@ pub async fn reactivate_pool(
 
     let mut active: pools::ActiveModel = pool.into();
     active.is_active = Set(true);
-    let _ = active.update(&state.db).await;
+    if let Err(e) = active.update(&state.db).await {
+        tracing::error!("failed to reactivate pool: {e}");
+        return Redirect::to("/dashboard?error=update_failed").into_response();
+    }
 
     Redirect::to("/dashboard?saved=true").into_response()
 }
@@ -362,7 +376,10 @@ pub async fn deactivate_api_key(
 
     let mut active: api_keys::ActiveModel = key.into();
     active.is_active = Set(false);
-    let _ = active.update(&state.db).await;
+    if let Err(e) = active.update(&state.db).await {
+        tracing::error!("failed to deactivate api key: {e}");
+        return Redirect::to("/dashboard?error=update_failed").into_response();
+    }
 
     Redirect::to("/dashboard?saved=true").into_response()
 }
@@ -410,7 +427,10 @@ pub async fn remove_host_from_pool(
     if let Ok(Some(m)) = membership {
         let mut active: host_pool_memberships::ActiveModel = m.into();
         active.is_active = Set(false);
-        let _ = active.update(&state.db).await;
+        if let Err(e) = active.update(&state.db).await {
+            tracing::error!("failed to remove host from pool: {e}");
+            return Redirect::to("/dashboard?error=update_failed").into_response();
+        }
     }
 
     // Update in-memory HostManager
