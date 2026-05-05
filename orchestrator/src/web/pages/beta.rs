@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-use axum::{extract::Query, response::Html};
+use axum::{extract::{Query, State}, response::Html};
 use leptos::prelude::*;
 use serde::Deserialize;
 use crate::web::components::*;
@@ -36,9 +36,16 @@ fn RoleOption(
 }
 
 #[component]
-fn BetaInvite(error: Option<String>) -> impl IntoView {
+fn BetaInvite(error: Option<String>, turnstile_site_key: Option<String>) -> impl IntoView {
+    let captcha_widget = turnstile_site_key.clone().map(|key| view! {
+        <>
+            <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+            <div class="cf-turnstile" data-sitekey={key} data-theme="dark"></div>
+        </>
+    });
+
     view! {
-        <Base title="cocompute — beta invite">
+        <Base title="cocompute — sign up">
             <PageShell>
                 <div class="flex items-center justify-center min-h-screen py-12">
                     <form method="POST" action="/beta" class="w-[480px] rounded-xl bg-[#16161E] border border-[#27272A] px-9 py-10 flex flex-col gap-6">
@@ -46,8 +53,8 @@ fn BetaInvite(error: Option<String>) -> impl IntoView {
                         // Header
                         <div class="flex flex-col gap-2">
                             <h1 class="text-white text-2xl font-bold">"cocompute"</h1>
-                            <p class="text-[#A1A1AA] text-base font-medium">"Request Beta Access"</p>
-                            <p class="text-[#52525B] text-[13px]">"We're launching invite-only. Tell us about yourself."</p>
+                            <p class="text-[#A1A1AA] text-base font-medium">"Sign up"</p>
+                            <p class="text-[#52525B] text-[13px]">"Free signup. Tell us how you'd use cocompute and we'll be in touch."</p>
                         </div>
 
                         {error.map(|msg| view! {
@@ -60,18 +67,21 @@ fn BetaInvite(error: Option<String>) -> impl IntoView {
                         // Role selection
                         <fieldset class="flex flex-col gap-2">
                             <legend class="text-[#A1A1AA] text-[13px] font-medium mb-2">"I want to..."</legend>
-                            <RoleOption value="consumer" title="Use compute (consumer)" description="Run AI models on shared GPUs" checked=true/>
-                            <RoleOption value="host" title="Share my GPU (host)" description="Earn credits by sharing idle compute"/>
+                            <RoleOption value="consumer" title="Use compute" description="Run AI models on shared GPUs" checked=true/>
+                            <RoleOption value="host" title="Share my GPU" description="Contribute idle compute to the pool"/>
                             <RoleOption value="both" title="Both" description="Use and share compute"/>
                         </fieldset>
 
                         <TextInput
-                            label="What GPU(s) do you have?"
+                            label="What hardware do you have?"
                             r#type="text"
                             name="gpu"
-                            placeholder="e.g. RTX 3090, RTX 4090, M2 Max..."
-                            hint="Optional — helps us prioritize your invite"
+                            placeholder="e.g. RTX 3090, M2 Max, Radeon 7900..."
+                            hint="Optional — anything Ollama runs on works"
                         />
+
+                        // Turnstile widget (renders only when site_key is configured)
+                        {captcha_widget}
 
                         <hr class="border-[#27272A]"/>
 
@@ -81,12 +91,12 @@ fn BetaInvite(error: Option<String>) -> impl IntoView {
                             class="h-12 rounded-lg bg-indigo-500 text-white font-semibold text-[15px] flex items-center justify-center gap-2 hover:bg-indigo-600 transition cursor-pointer"
                         >
                             <Icon name="sparkles" class="w-[18px] h-[18px]"/>
-                            "Request Beta Invite"
+                            "Sign up"
                         </button>
 
                         // Footer link
                         <div class="flex justify-center gap-1">
-                            <span class="text-[#52525B] text-[13px]">"Already have an invite?"</span>
+                            <span class="text-[#52525B] text-[13px]">"Already signed up?"</span>
                             <a href="/login" class="text-indigo-500 text-[13px] font-medium hover:underline">"Sign in"</a>
                         </div>
                     </form>
@@ -113,10 +123,16 @@ fn BetaConfirmation() -> impl IntoView {
     }
 }
 
-pub async fn beta(Query(params): Query<BetaQuery>) -> Html<String> {
+pub async fn beta(
+    State(state): State<crate::AppState>,
+    Query(params): Query<BetaQuery>,
+) -> Html<String> {
     if params.success.unwrap_or(false) {
         crate::web::render(BetaConfirmation())
     } else {
-        crate::web::render(BetaInvite(BetaInviteProps { error: params.error }))
+        crate::web::render(BetaInvite(BetaInviteProps {
+            error: params.error,
+            turnstile_site_key: state.turnstile_site_key.clone(),
+        }))
     }
 }

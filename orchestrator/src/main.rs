@@ -63,6 +63,14 @@ struct Args {
     #[arg(long, env = "SMTP_FROM")]
     smtp_from: Option<String>,
 
+    /// Cloudflare Turnstile site key (public; rendered in HTML). If unset, captcha is disabled (dev mode).
+    #[arg(long, env = "TURNSTILE_SITE_KEY")]
+    turnstile_site_key: Option<String>,
+
+    /// Cloudflare Turnstile secret key (server-side; verifies the response token). If unset, captcha is disabled (dev mode).
+    #[arg(long, env = "TURNSTILE_SECRET_KEY")]
+    turnstile_secret_key: Option<String>,
+
     #[command(subcommand)]
     command: Option<Command>,
 }
@@ -89,6 +97,12 @@ pub(crate) struct AppState {
     pub(crate) mailer: Option<std::sync::Arc<email::Mailer>>,
     pub(crate) session_key: axum_extra::extract::cookie::Key,
     pub(crate) base_url: String,
+    /// Cloudflare Turnstile site key (public). None disables captcha (dev).
+    pub(crate) turnstile_site_key: Option<String>,
+    /// Cloudflare Turnstile secret key (server-side). None disables captcha (dev).
+    pub(crate) turnstile_secret_key: Option<String>,
+    /// Shared HTTP client for outbound calls (Turnstile siteverify, etc.).
+    pub(crate) http: reqwest::Client,
 }
 
 impl axum::extract::FromRef<AppState> for axum_extra::extract::cookie::Key {
@@ -235,6 +249,12 @@ async fn main() -> anyhow::Result<()> {
                 .spawn();
             tracing::info!("accepting host connections on ALPN cocompute/0");
 
+            if args.turnstile_site_key.is_some() && args.turnstile_secret_key.is_some() {
+                tracing::info!("Turnstile captcha enabled for /beta signup");
+            } else {
+                tracing::warn!("TURNSTILE_SITE_KEY/TURNSTILE_SECRET_KEY not set — captcha disabled (dev mode)");
+            }
+
             let state = AppState {
                 endpoint,
                 endpoint_id,
@@ -243,6 +263,12 @@ async fn main() -> anyhow::Result<()> {
                 mailer,
                 session_key,
                 base_url: args.base_url,
+                turnstile_site_key: args.turnstile_site_key,
+                turnstile_secret_key: args.turnstile_secret_key,
+                http: reqwest::Client::builder()
+                    .timeout(std::time::Duration::from_secs(10))
+                    .build()
+                    .expect("failed to build reqwest client"),
             };
 
             let app = Router::new()
