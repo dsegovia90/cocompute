@@ -247,15 +247,38 @@ pub async fn add_host_to_pool(
         _ => return Redirect::to("/dashboard").into_response(),
     }
 
-    // Create pool membership
-    let membership = host_pool_memberships::ActiveModel {
-        host_endpoint_id: Set(form.host_id.clone()),
-        pool_id: Set(pool.id),
-        created_at: Set(chrono::Utc::now()),
-        ..Default::default()
-    };
-    if let Err(e) = membership.insert(&state.db).await {
-        tracing::debug!("host pool membership insert (may be duplicate): {e}");
+    // Upsert pool membership: reactivate a soft-deleted row if one exists,
+    // otherwise insert a new one. The unique index on (host_endpoint_id, pool_id)
+    // means a plain INSERT fails after the host was previously removed.
+    let existing = host_pool_memberships::Entity::find()
+        .filter(host_pool_memberships::Column::HostEndpointId.eq(&form.host_id))
+        .filter(host_pool_memberships::Column::PoolId.eq(pool.id))
+        .one(&state.db)
+        .await
+        .ok()
+        .flatten();
+
+    match existing {
+        Some(m) => {
+            let mut active: host_pool_memberships::ActiveModel = m.into();
+            active.is_active = Set(true);
+            if let Err(e) = active.update(&state.db).await {
+                tracing::error!("failed to reactivate host_pool_membership: {e}");
+                return Redirect::to("/dashboard?error=add_host_failed").into_response();
+            }
+        }
+        None => {
+            let membership = host_pool_memberships::ActiveModel {
+                host_endpoint_id: Set(form.host_id.clone()),
+                pool_id: Set(pool.id),
+                created_at: Set(chrono::Utc::now()),
+                ..Default::default()
+            };
+            if let Err(e) = membership.insert(&state.db).await {
+                tracing::error!("failed to insert host_pool_membership: {e}");
+                return Redirect::to("/dashboard?error=add_host_failed").into_response();
+            }
+        }
     }
 
     // Update in-memory HostManager
