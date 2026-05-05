@@ -56,6 +56,7 @@ pub async fn create_pool_api_key(
 ) -> Response {
     let pool = pools::Entity::find()
         .filter(pools::Column::Pid.eq(&pool_pid))
+        .filter(pools::Column::IsActive.eq(true))
         .one(&state.db)
         .await;
 
@@ -113,6 +114,7 @@ pub async fn create_global_api_key(
     // Find the global pool
     let global_pool = pools::Entity::find()
         .filter(pools::Column::IsGlobal.eq(true))
+        .filter(pools::Column::IsActive.eq(true))
         .one(&state.db)
         .await;
 
@@ -174,6 +176,7 @@ pub async fn rename_api_key(
     Form(form): Form<RenameApiKeyForm>,
 ) -> Response {
     let key = api_keys::Entity::find_by_id(key_id)
+        .filter(api_keys::Column::IsActive.eq(true))
         .one(&state.db)
         .await;
 

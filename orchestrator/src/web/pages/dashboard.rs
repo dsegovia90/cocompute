@@ -421,9 +421,11 @@ pub async fn dashboard(
     for host in &owned_host_records {
         let hid = &host.endpoint_id; // This stores host_id now
 
-        // Get pool memberships for this host
+        // Get pool memberships for this host (only active; soft-deleted memberships
+        // must not appear in the host's "pool_names" display).
         let memberships = host_pool_memberships::Entity::find()
             .filter(host_pool_memberships::Column::HostEndpointId.eq(hid))
+            .filter(host_pool_memberships::Column::IsActive.eq(true))
             .all(&state.db)
             .await
             .unwrap_or_default();

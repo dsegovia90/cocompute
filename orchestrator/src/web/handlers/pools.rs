@@ -74,6 +74,7 @@ pub async fn rename_pool(
 ) -> Response {
     let pool = pools::Entity::find()
         .filter(pools::Column::Pid.eq(&pool_pid))
+        .filter(pools::Column::IsActive.eq(true))
         .one(&state.db)
         .await;
 
@@ -107,6 +108,7 @@ pub async fn invite_member(
     // Find pool and verify ownership
     let pool = pools::Entity::find()
         .filter(pools::Column::Pid.eq(&pool_pid))
+        .filter(pools::Column::IsActive.eq(true))
         .one(&state.db)
         .await;
 
@@ -172,6 +174,7 @@ pub async fn accept_invite(
 ) -> Response {
     let pool = pools::Entity::find()
         .filter(pools::Column::Pid.eq(&pool_pid))
+        .filter(pools::Column::IsActive.eq(true))
         .one(&state.db)
         .await;
 
@@ -215,6 +218,7 @@ pub async fn add_host_to_pool(
     // Verify user is pool owner or member
     let pool = pools::Entity::find()
         .filter(pools::Column::Pid.eq(&pool_pid))
+        .filter(pools::Column::IsActive.eq(true))
         .one(&state.db)
         .await;
 
@@ -347,6 +351,7 @@ pub async fn deactivate_api_key(
     axum::extract::Path(key_id): axum::extract::Path<i32>,
 ) -> Response {
     let key = api_keys::Entity::find_by_id(key_id)
+        .filter(api_keys::Column::IsActive.eq(true))
         .one(&state.db)
         .await;
 
@@ -373,6 +378,7 @@ pub async fn remove_host_from_pool(
     // Find pool
     let pool = pools::Entity::find()
         .filter(pools::Column::Pid.eq(&pool_pid))
+        .filter(pools::Column::IsActive.eq(true))
         .one(&state.db)
         .await;
 

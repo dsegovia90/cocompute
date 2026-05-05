@@ -61,9 +61,12 @@ impl HostAcceptor {
     }
 
     /// Restore pool memberships from DB for a reconnecting host.
+    /// Only ACTIVE memberships count. Soft-deleted rows (is_active=false) must be
+    /// ignored, otherwise removed pools leak back into available_models() responses.
     async fn restore_pools(&self, host_id: &str) -> (Vec<i32>, Option<i32>) {
         let memberships = host_pool_memberships::Entity::find()
             .filter(host_pool_memberships::Column::HostEndpointId.eq(host_id))
+            .filter(host_pool_memberships::Column::IsActive.eq(true))
             .all(&self.db)
             .await
             .unwrap_or_default();
