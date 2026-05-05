@@ -16,6 +16,10 @@ fn Landing(logged_in: bool) -> impl IntoView {
                 <nav class="flex items-center justify-between px-6 py-4">
                     <span class="text-white font-bold text-lg">"cocompute"</span>
                     <div class="flex items-center gap-5">
+                        <a href="https://github.com/dsegovia90/cocompute" target="_blank" rel="noopener" class="text-[#A1A1AA] text-sm font-medium hover:text-white transition flex items-center gap-1.5">
+                            <Icon name="github" class="w-4 h-4"/>
+                            "GitHub"
+                        </a>
                         {if logged_in {
                             view! {
                                 <a href="/dashboard" class="rounded-lg bg-indigo-500 px-5 py-2.5 text-white text-sm font-semibold hover:bg-indigo-600 transition">
@@ -26,7 +30,7 @@ fn Landing(logged_in: bool) -> impl IntoView {
                             view! {
                                 <a href="/login" class="text-[#A1A1AA] text-sm font-medium hover:text-white transition">"Log in"</a>
                                 <a href="/beta" class="hidden md:inline-block rounded-lg bg-indigo-500 px-5 py-2.5 text-white text-sm font-semibold hover:bg-indigo-600 transition">
-                                    "Request Beta Invite"
+                                    "Sign up"
                                 </a>
                             }.into_any()
                         }}
@@ -35,15 +39,24 @@ fn Landing(logged_in: bool) -> impl IntoView {
 
                 // ── Hero ──
                 <section class="flex flex-col items-center px-6 pt-20 pb-16">
+                    <div class="mb-5 inline-flex items-center gap-2 rounded-full bg-[#16161E] border border-[#27272A] px-3 py-1.5">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                        <span class="text-[#A1A1AA] text-xs font-medium">"Open source · AGPLv3 · Self-host or hosted · No crypto"</span>
+                    </div>
                     <h1 class="text-white text-5xl font-bold text-center leading-tight max-w-3xl">
-                        "Your GPU, your inference."<br/>"No cloud needed."
+                        "Your GPU, your inference."<br/>
+                        <span class="text-[#A1A1AA]">"Open infrastructure for the rest of us."</span>
                     </h1>
                     <p class="mt-5 text-[#A1A1AA] text-base text-center max-w-xl leading-relaxed">
-                        "cocompute turns your idle GPU into a personal AI inference server. Use your own hardware for free, or tap into the marketplace when you need more."
+                        "cocompute is open infrastructure for cooperative LLM inference on consumer hardware. Share your GPU (NVIDIA, AMD, Apple Silicon, anything Ollama runs on) over the internet. Use the pool through an OpenAI-compatible API. Self-host the whole stack, or use cocompute.io."
                     </p>
-                    <div class="mt-10">
-                        <a href="/beta" class="rounded-lg bg-indigo-500 px-7 py-3.5 text-white font-semibold hover:bg-indigo-600 transition">
-                            "Request Beta Invite"
+                    <div class="mt-10 flex flex-wrap items-center justify-center gap-3">
+                        <a href="/quickstart" class="rounded-lg bg-indigo-500 px-7 py-3.5 text-white font-semibold hover:bg-indigo-600 transition">
+                            "Get started"
+                        </a>
+                        <a href="https://github.com/dsegovia90/cocompute" target="_blank" rel="noopener" class="rounded-lg bg-[#27272A] border border-[#3F3F46] px-7 py-3.5 text-[#A1A1AA] font-semibold hover:text-white hover:border-[#52525B] transition flex items-center gap-2">
+                            <Icon name="github" class="w-[18px] h-[18px]"/>
+                            "View on GitHub"
                         </a>
                     </div>
 
@@ -71,7 +84,7 @@ fn Landing(logged_in: bool) -> impl IntoView {
                         <div class="rounded-xl bg-[#16161E] border border-[#27272A] p-8">
                             <h3 class="text-emerald-400 text-lg font-bold mb-2">"Have a GPU?"</h3>
                             <p class="text-[#A1A1AA] text-sm leading-relaxed">
-                                "Share your idle 3060, 3090, or 4090 with the pool. One command to install, runs as a background service. In return, get access to every GPU in the network."
+                                "Share your idle hardware with the pool. Anything Ollama runs on works: NVIDIA, AMD, Apple Silicon, even CPU. One command to install, runs as a background service. In return, access every GPU in the network."
                             </p>
                         </div>
                         <div class="rounded-xl bg-[#16161E] border border-[#27272A] p-8">
@@ -90,67 +103,94 @@ fn Landing(logged_in: bool) -> impl IntoView {
                 <section class="px-6 py-16 flex flex-col items-center">
                     <h2 class="text-white text-3xl font-bold text-center">"How it works"</h2>
                     <p class="mt-3 text-[#71717A] text-base text-center">
-                        "From your own GPU to a global compute network — in three simple steps."
+                        "Open source protocol, hosted as a service, or self-hosted."
                     </p>
                     <div class="mt-10 grid grid-cols-1 md:grid-cols-3 gap-5 w-full max-w-5xl">
                         <FeatureCard
                             icon="monitor"
-                            title="Bring your GPU"
-                            description="Install cocompute on any machine with a GPU. Your hardware becomes a personal inference server, accessible anywhere."
+                            title="Bring your hardware"
+                            description="Install cocompute on any machine that runs Ollama. Your GPU joins the pool from your home network. We handle the NAT traversal and hole punching, so no port forwarding, no router config."
                             badge=("FREE", "bg-emerald-500/20 text-emerald-500")
                         />
                         <FeatureCard
                             icon="code"
-                            title="Ollama-compatible API"
-                            description="Drop-in replacement for Ollama. Same /v1/ API, works with all your existing tools and scripts."
+                            title="OpenAI-compatible API"
+                            description="Drop-in replacement for the OpenAI SDK. Same /v1/ endpoints, works with every existing tool and client."
                         />
                         <FeatureCard
-                            icon="shopping-bag"
-                            title="Marketplace"
-                            description="Need more compute? Tap into GPUs shared by others. Or earn credits by sharing your idle GPU."
+                            icon="cpu"
+                            title="Cooperative pools"
+                            description="Share with friends, your team, or the public pool. Pool-credit accounting tracks reciprocity. No tokens, no crypto."
                         />
                     </div>
                 </section>
 
-                // ── Pricing ──
+                // ── Open Source ──
+                <section class="px-6 py-16 flex flex-col items-center">
+                    <div class="max-w-3xl w-full rounded-2xl bg-gradient-to-br from-[#16161E] to-[#0E0E15] border border-[#27272A] p-10">
+                        <div class="flex items-start gap-4">
+                            <div class="shrink-0 rounded-lg bg-[#27272A] p-3">
+                                <Icon name="github" class="w-6 h-6 text-white"/>
+                            </div>
+                            <div class="flex-1">
+                                <h2 class="text-white text-2xl font-bold">"Open source. AGPLv3."</h2>
+                                <p class="mt-2 text-[#A1A1AA] text-sm leading-relaxed">
+                                    "cocompute is free software you can self-host, fork, and modify. The code that runs cocompute.io is the same code in the public repo. cocompute.io is the hosted version for people who don't want to operate their own orchestrator."
+                                </p>
+                                <div class="mt-5 flex flex-wrap gap-3">
+                                    <a href="https://github.com/dsegovia90/cocompute" target="_blank" rel="noopener" class="rounded-lg bg-[#27272A] border border-[#3F3F46] px-5 py-2.5 text-[#A1A1AA] text-sm font-semibold hover:text-white hover:border-[#52525B] transition flex items-center gap-2">
+                                        <Icon name="github" class="w-4 h-4"/>
+                                        "github.com/dsegovia90/cocompute"
+                                    </a>
+                                    <a href="/quickstart" class="rounded-lg bg-[#27272A] border border-[#3F3F46] px-5 py-2.5 text-[#A1A1AA] text-sm font-semibold hover:text-white hover:border-[#52525B] transition">
+                                        "Self-hosting guide"
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                // ── Self-host vs hosted ──
                 <section class="px-6 py-20 flex flex-col items-center max-w-5xl mx-auto">
-                    <h2 class="text-white text-3xl font-bold">"Simple pricing"</h2>
-                    <p class="mt-2 text-[#71717A] text-base">
-                        "Use your own hardware for free. Only pay when you need more."
+                    <h2 class="text-white text-3xl font-bold">"Two ways to run cocompute"</h2>
+                    <p class="mt-2 text-[#71717A] text-base text-center max-w-xl">
+                        "Same protocol either way. Pick whichever fits your trust model."
                     </p>
 
                     <div class="mt-12 grid grid-cols-1 md:grid-cols-2 gap-6 w-full">
-                        // Free tier
-                        <div class="rounded-xl bg-[#16161E] border-2 border-indigo-500 p-8 flex flex-col gap-6">
-                            <div>
-                                <h3 class="text-white text-2xl font-bold">"Your GPU"</h3>
-                                <p class="mt-2 text-emerald-500 text-4xl font-bold">"Free"</p>
-                            </div>
-                            <hr class="border-[#27272A]"/>
-                            <ul class="flex flex-col gap-3.5">
-                                <CheckItem text="Run models on your own GPU" green=true/>
-                                <CheckItem text="Ollama-compatible /v1/ API" green=true/>
-                                <CheckItem text="Access from anywhere" green=true/>
-                                <CheckItem text="Earn credits by sharing idle compute" green=true/>
-                                <CheckItem text="No credit card required" green=true/>
-                            </ul>
-                        </div>
-                        // Marketplace tier
+                        // Self-host
                         <Card class="p-8 flex flex-col gap-6">
                             <div>
-                                <h3 class="text-white text-2xl font-bold">"Marketplace"</h3>
-                                <p class="mt-2 text-white text-3xl font-bold">"Pay as you go"</p>
-                                <p class="mt-1 text-[#71717A] text-sm">"Credits · only when you need more"</p>
+                                <h3 class="text-white text-2xl font-bold">"Self-host"</h3>
+                                <p class="mt-2 text-emerald-500 text-4xl font-bold">"Free"</p>
+                                <p class="mt-1 text-[#71717A] text-sm">"AGPLv3 · run your own orchestrator"</p>
                             </div>
                             <hr class="border-[#27272A]"/>
                             <ul class="flex flex-col gap-3.5">
-                                <CheckItem text="Access GPUs shared by others"/>
-                                <CheckItem text="Pay-as-you-go with credits"/>
-                                <CheckItem text="Stripe fees passed through at cost"/>
-                                <CheckItem text="Credits last weeks at typical usage"/>
-                                <CheckItem text="Top up anytime, no subscription"/>
+                                <CheckItem text="Full source code, MIT-style stack on your terms"/>
+                                <CheckItem text="Complete control over hosts and pools"/>
+                                <CheckItem text="Run on your own infra, your own domain"/>
+                                <CheckItem text="No telemetry, no third party"/>
+                                <CheckItem text="Modify, fork, extend"/>
                             </ul>
                         </Card>
+                        // Hosted on cocompute.io
+                        <div class="rounded-xl bg-[#16161E] border-2 border-indigo-500 p-8 flex flex-col gap-6">
+                            <div>
+                                <h3 class="text-white text-2xl font-bold">"cocompute.io"</h3>
+                                <p class="mt-2 text-emerald-500 text-4xl font-bold">"Free to start"</p>
+                                <p class="mt-1 text-[#71717A] text-sm">"Hosted orchestrator · zero ops"</p>
+                            </div>
+                            <hr class="border-[#27272A]"/>
+                            <ul class="flex flex-col gap-3.5">
+                                <CheckItem text="One command to register a host" green=true/>
+                                <CheckItem text="Join the public pool" green=true/>
+                                <CheckItem text="OpenAI-compatible /v1/ API endpoint" green=true/>
+                                <CheckItem text="No infra to operate" green=true/>
+                                <CheckItem text="Optional paid tier coming for marketplace compute" green=true/>
+                            </ul>
+                        </div>
                     </div>
 
                     // ── CTA Footer ──
@@ -161,13 +201,17 @@ fn Landing(logged_in: bool) -> impl IntoView {
                                 "Ready to run inference on your own terms?"
                             </h3>
                             <p class="text-[#71717A] text-sm">
-                                "Invite-only beta — limited spots available."
+                                "Free signup. No credit card."
                             </p>
                             <a href="/beta" class="mt-2 flex items-center gap-2 rounded-lg bg-indigo-500 px-8 py-3.5 text-white font-semibold hover:bg-indigo-600 transition">
                                 <Icon name="sparkles" class="w-[18px] h-[18px]"/>
-                                "Request Beta Invite"
+                                "Sign up"
                             </a>
-                            <p class="mt-4 text-[#3F3F46] text-xs">"© 2026 cocompute"</p>
+                            <p class="mt-4 text-[#3F3F46] text-xs">
+                                "© 2026 cocompute · "
+                                <a href="https://github.com/dsegovia90/cocompute" target="_blank" rel="noopener" class="hover:text-[#A1A1AA] transition">"GitHub"</a>
+                                " · AGPLv3"
+                            </p>
                         </div>
                     </div>
                 </section>
