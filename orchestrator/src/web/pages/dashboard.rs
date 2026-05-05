@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
 use axum::{extract::{Query, State}, response::Html};
 use leptos::prelude::*;
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};

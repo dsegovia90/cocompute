@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
 //! OpenAI-compatible request/response types.
 //! These translate between the OpenAI API format (JSON over HTTP)
 //! and our internal protocol types (bitcode over iroh).

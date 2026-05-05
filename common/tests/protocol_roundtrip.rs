@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
 use bitcode::{Decode, Encode};
 use common::protocols::{
     ChatStreamFrame, Metering, Request, Response,

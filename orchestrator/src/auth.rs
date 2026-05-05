@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
 use axum::{
     extract::{FromRequestParts, Request, State},
     http::{header::AUTHORIZATION, request::Parts},

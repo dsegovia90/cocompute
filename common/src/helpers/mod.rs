@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
 use bitcode::{Decode, Encode};
 use iroh::endpoint::{RecvStream, SendStream};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};

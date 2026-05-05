@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
 use common::{
     helpers::read_p2p,
     protocols::{Request, Response, registry::RegistryResponse},

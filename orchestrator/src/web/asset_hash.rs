@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
 /// Compile-time content hashes for cache-busting static assets.
 /// When a file changes and the crate is rebuilt, the hash updates automatically.
 

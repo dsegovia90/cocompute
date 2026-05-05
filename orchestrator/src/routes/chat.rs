@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
 use axum::{Extension, Json, extract::State, response::IntoResponse};
 use axum::response::sse::{Event, Sse};
 use common::{

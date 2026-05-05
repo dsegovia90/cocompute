@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
 use axum::{Router, middleware, routing::{get, post}};
 use clap::{Parser, Subcommand};
 use common::protocols;

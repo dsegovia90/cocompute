@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
 use axum::response::Html;
 use axum_extra::extract::cookie::SignedCookieJar;
 use leptos::prelude::*;
