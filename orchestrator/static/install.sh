@@ -29,15 +29,21 @@ if [ -z "$BASE_URL" ]; then
     exit 1
 fi
 
-# Detect platform
+# Detect platform. Normalize OS name (uname returns "darwin" on macOS, but our
+# release artifacts and orchestrator route use "macos") and arch name.
 ARCH=$(uname -m)
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 case "$ARCH" in
-    x86_64)  PLATFORM="${OS}-x86_64" ;;
-    aarch64) PLATFORM="${OS}-arm64" ;;
-    arm64)   PLATFORM="${OS}-arm64" ;;
-    *)       echo "Unsupported architecture: $ARCH"; exit 1 ;;
+    x86_64)        ARCH_NAME="x86_64" ;;
+    aarch64|arm64) ARCH_NAME="arm64" ;;
+    *)             echo "Unsupported architecture: $ARCH"; exit 1 ;;
 esac
+case "$OS" in
+    darwin) OS_NAME="macos" ;;
+    linux)  OS_NAME="linux" ;;
+    *)      echo "Unsupported OS: $OS"; exit 1 ;;
+esac
+PLATFORM="${OS_NAME}-${ARCH_NAME}"
 
 # Fetch orchestrator endpoint ID
 echo "Fetching orchestrator info from $BASE_URL..."
