@@ -9,6 +9,8 @@ context.md
 .zed
 node_modules
 .env
+.env.*
+!.env.example
 orchestrator/static/output.css
 .context
 prod/

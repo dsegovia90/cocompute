@@ -80,6 +80,15 @@ enum Command {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    // Load .env files BEFORE parsing args so clap sees them as if they were
+    // exported in the shell. Order: .env.{COCOMPUTE_ENV} (default "development")
+    // wins, then .env fills any gaps. Real shell env vars beat both files.
+    // Both files are optional; missing files are not an error.
+    let env_name = std::env::var("COCOMPUTE_ENV").unwrap_or_else(|_| "development".into());
+    let env_specific = format!(".env.{env_name}");
+    let env_specific_loaded = dotenvy::from_filename(&env_specific).is_ok();
+    let env_default_loaded = dotenvy::dotenv().is_ok();
+
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
@@ -90,6 +99,15 @@ async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
     tracing::info!("cocompute-orchestrator v{}", env!("CARGO_PKG_VERSION"));
+    if env_specific_loaded {
+        tracing::info!("loaded env file: {env_specific}");
+    }
+    if env_default_loaded {
+        tracing::info!("loaded env file: .env");
+    }
+    if !env_specific_loaded && !env_default_loaded {
+        tracing::debug!("no .env files loaded (none present, or all values already in shell env)");
+    }
 
     let db_url = format!("sqlite://{}?mode=rwc", args.db_path);
     let db = Database::connect(&db_url).await?;
@@ -238,7 +256,17 @@ async fn main() -> anyhow::Result<()> {
             let addr = format!("0.0.0.0:{}", args.port);
             let listener = tokio::net::TcpListener::bind(&addr).await?;
             tracing::info!("listening on {addr}");
-            axum::serve(listener, app).await?;
+            // `into_make_service_with_connect_info::<SocketAddr>()` makes the
+            // peer connection IP available via the ConnectInfo extension.
+            // tower-governor's SmartIpKeyExtractor needs this to rate-limit by
+            // source IP when X-Forwarded-For isn't set (e.g., direct localhost
+            // connections in dev). Without it, the extractor errors and the
+            // request fails with 500 before reaching the handler.
+            axum::serve(
+                listener,
+                app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
+            )
+            .await?;
 
             Ok(())
         }
