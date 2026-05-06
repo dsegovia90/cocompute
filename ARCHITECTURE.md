@@ -12,7 +12,7 @@ cocompute/
 ## Data flow
 
 ```
-HOST (consumer hardware, behind NAT)            ORCHESTRATOR (cocompute.io or self-hosted)
+HOST (consumer hardware, behind NAT)            ORCHESTRATOR (cocompute.ai or self-hosted)
                                                      |
   cocompute_host binary                              | Axum HTTP (default port 4000)
   ├─ iroh::Endpoint (ephemeral key)                  | Leptos SSR pages (landing, dashboard, ...)
@@ -89,7 +89,7 @@ Larger crate. Web UI plus API plus host acceptor plus DB.
 
 ## Open-core boundary
 
-This repository is the AGPL open core. A separate private repository (`cocompute-cloud`, not in this monorepo) contains the proprietary additions that run only on cocompute.io:
+This repository is the AGPL open core. A separate private repository (`cocompute-cloud`, not in this monorepo) contains the proprietary additions that run only on cocompute.ai:
 
 - Stripe billing and metering enforcement
 - Verified host program features

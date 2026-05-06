@@ -2,11 +2,11 @@
 
 **Effective date:** 2026-05-05
 
-This Host Operator Agreement ("Host Agreement") governs your operation of a host on the cocompute.io network. By installing and running `cocompute_host` and registering it against cocompute.io, you agree to these terms.
+This Host Operator Agreement ("Host Agreement") governs your operation of a host on the cocompute.ai network. By installing and running `cocompute_host` and registering it against cocompute.ai, you agree to these terms.
 
 This agreement is in addition to the [Terms of Service](./TERMS.md) and the [Acceptable Use Policy](./AUP.md), both of which also apply to your use of the Service.
 
-If you self-host your own orchestrator, this agreement does not apply to your private network. It applies only when your host registers with cocompute.io.
+If you self-host your own orchestrator, this agreement does not apply to your private network. It applies only when your host registers with cocompute.ai.
 
 ## 1. What you are
 
@@ -36,7 +36,7 @@ We do **not** collect or store the contents of prompts or responses on the orche
 
 Your host's local Ollama instance processes prompts and generates responses on your hardware. You have technical access to this content. You agree to:
 
-- **Not** log, store, or share prompt or response content for any purpose other than local debugging unless you disclose your logging policy in writing to the operator (operations@cocompute.io) and obtain approval. We may decline approval and remove your host from the network if your logging is incompatible with user expectations.
+- **Not** log, store, or share prompt or response content for any purpose other than local debugging unless you disclose your logging policy in writing to the operator (operations@cocompute.ai) and obtain approval. We may decline approval and remove your host from the network if your logging is incompatible with user expectations.
 - **Not** train models on prompts that pass through your host without explicit consent from the prompt's author. (Asking the consumer is not consent: cocompute users have not opted in to having their prompts used as training data.)
 - Treat any prompt content you incidentally see (during local debugging, error inspection, etc.) as confidential.
 
@@ -94,5 +94,5 @@ We may update this Host Agreement as the Service evolves. Material changes will 
 
 ## 12. Contact
 
-Questions: hosts@cocompute.io
-Abuse reports about content routed through your host: abuse@cocompute.io
+Questions: hosts@cocompute.ai
+Abuse reports about content routed through your host: abuse@cocompute.ai

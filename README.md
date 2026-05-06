@@ -4,12 +4,12 @@ Open infrastructure for cooperative LLM inference on consumer hardware.
 
 cocompute lets you share an idle GPU sitting on your home network, and use other people's GPUs through an OpenAI-compatible API. Anything that runs Ollama works (NVIDIA, AMD, Apple Silicon, CPU). NAT traversal is handled by [iroh](https://www.iroh.computer/), so no port forwarding, no router config, no public IP required.
 
-The protocol is open and AGPL-licensed. The same code that runs at [cocompute.io](https://cocompute.io) is the code in this repo. cocompute.io is the hosted version for people who don't want to operate their own orchestrator.
+The protocol is open and AGPL-licensed. The same code that runs at [cocompute.ai](https://cocompute.ai) is the code in this repo. cocompute.ai is the hosted version for people who don't want to operate their own orchestrator.
 
 ```
 ┌──────────────┐                ┌────────────────────┐                ┌──────────────┐
 │ host         │  iroh / QUIC   │ orchestrator       │  HTTP / JSON   │ consumer     │
-│ (your GPU)   │ ◄──────────────►│ (cocompute.io      │ ◄──────────────►│ (curl, SDK,  │
+│ (your GPU)   │ ◄──────────────►│ (cocompute.ai      │ ◄──────────────►│ (curl, SDK,  │
 │ runs Ollama  │                │  or self-hosted)   │                │  openwebui)  │
 └──────────────┘                └────────────────────┘                └──────────────┘
 ```
@@ -25,15 +25,15 @@ You can be a host (share your GPU), a consumer (use the pool), or both.
 **Share your GPU:** sign up, click "Add Host" in the dashboard for a one-line install command, run it on any machine that runs Ollama. Service installs via systemd (Linux) or launchd (macOS) and stays running in the background.
 
 ```sh
-curl -sSf https://cocompute.io/install.sh | COCOMPUTE_URL=https://cocompute.io bash -s -- --token YOUR_TOKEN
+curl -sSf https://cocompute.ai/install.sh | COCOMPUTE_URL=https://cocompute.ai bash -s -- --token YOUR_TOKEN
 ```
 
 (Future) Reciprocity is tracked by pool-credit accounting. No tokens, no crypto.
 
-**Use the pool (no public pools yet):** sign up at [cocompute.io/quickstart](https://cocompute.io/quickstart), create an API key, point any OpenAI-compatible client at `https://cocompute.io/v1/`. Two minutes if you have curl handy.
+**Use the pool (no public pools yet):** sign up at [cocompute.ai/quickstart](https://cocompute.ai/quickstart), create an API key, point any OpenAI-compatible client at `https://cocompute.ai/v1/`. Two minutes if you have curl handy.
 
 ```sh
-curl https://cocompute.io/v1/chat/completions \
+curl https://cocompute.ai/v1/chat/completions \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"model":"llama3.2","messages":[{"role":"user","content":"hello"}]}'
@@ -45,9 +45,9 @@ You can run your own orchestrator and host fleet. The orchestrator is a single R
 
 ## Why open source?
 
-Inference infrastructure is becoming the substrate for everything. A handful of vendors deciding what models you can run, and at what price, is not the future we want. The protocol that lets a 3090 in someone's apartment serve LLM inference to a laptop in a coffee shop should be open, forkable, and operable by anyone. cocompute.io is the convenient default; the code is the guarantee.
+Inference infrastructure is becoming the substrate for everything. A handful of vendors deciding what models you can run, and at what price, is not the future we want. The protocol that lets a 3090 in someone's apartment serve LLM inference to a laptop in a coffee shop should be open, forkable, and operable by anyone. cocompute.ai is the convenient default; the code is the guarantee.
 
-cocompute is licensed AGPLv3. Contributors sign a CLA so the project can offer a commercial license to the hosted operator (cocompute.io) without forcing all derivatives to inherit AGPL semantics. See [CONTRIBUTING.md](./CONTRIBUTING.md) for the full story.
+cocompute is licensed AGPLv3. Contributors sign a CLA so the project can offer a commercial license to the hosted operator (cocompute.ai) without forcing all derivatives to inherit AGPL semantics. See [CONTRIBUTING.md](./CONTRIBUTING.md) for the full story.
 
 ## Contributing
 

@@ -4,7 +4,7 @@ Thanks for considering a contribution. Read this first to avoid surprises.
 
 ## Before you open a PR
 
-cocompute requires a Contributor License Agreement (CLA). This is non-negotiable and exists for one reason: so the project can offer a non-AGPL license to the hosted operator (cocompute.io) without forcing all derivatives to inherit AGPLv3 §13 disclosure.
+cocompute requires a Contributor License Agreement (CLA). This is non-negotiable and exists for one reason: so the project can offer a non-AGPL license to the hosted operator (cocompute.ai) without forcing all derivatives to inherit AGPLv3 §13 disclosure.
 
 The CLA is enforced by [cla-assistant](https://cla-assistant.io/dsegovia90/cocompute). When you open a PR, a bot comments with the CLA text and a link to sign. You sign once per GitHub account, and the bot remembers you across all your PRs. The CLA does not change the AGPL license under which you receive the code; it grants the project the right to relicense your contribution.
 
@@ -102,7 +102,7 @@ Group logically. One commit per concern. Squash before merge if reviewers ask.
 
 ## Security
 
-Please do not file public issues for security vulnerabilities. Email security@cocompute.io or open a private security advisory on GitHub. We will respond within 72 hours and coordinate disclosure.
+Please do not file public issues for security vulnerabilities. Email security@cocompute.ai or open a private security advisory on GitHub. We will respond within 72 hours and coordinate disclosure.
 
 ## License
 

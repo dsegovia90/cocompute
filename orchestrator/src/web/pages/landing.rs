@@ -46,7 +46,7 @@ fn Landing(logged_in: bool) -> impl IntoView {
                         <span class="text-[#A1A1AA]">"Open infrastructure for the rest of us."</span>
                     </h1>
                     <p class="mt-5 text-[#A1A1AA] text-base text-center max-w-xl leading-relaxed">
-                        "cocompute is open infrastructure for cooperative LLM inference on consumer hardware. Share your GPU (NVIDIA, AMD, Apple Silicon, anything Ollama runs on) over the internet. Use the pool through an OpenAI-compatible API. Self-host the whole stack, or use cocompute.io."
+                        "cocompute is open infrastructure for cooperative LLM inference on consumer hardware. Share your GPU (NVIDIA, AMD, Apple Silicon, anything Ollama runs on) over the internet. Use the pool through an OpenAI-compatible API. Self-host the whole stack, or use cocompute.ai."
                     </p>
                     <div class="mt-10 flex flex-wrap items-center justify-center gap-3">
                         <a href="/quickstart" class="rounded-lg bg-indigo-500 px-7 py-3.5 text-white font-semibold hover:bg-indigo-600 transition">
@@ -133,7 +133,7 @@ fn Landing(logged_in: bool) -> impl IntoView {
                             <div class="flex-1">
                                 <h2 class="text-white text-2xl font-bold">"Open source. AGPLv3."</h2>
                                 <p class="mt-2 text-[#A1A1AA] text-sm leading-relaxed">
-                                    "cocompute is free software you can self-host, fork, and modify. The code that runs cocompute.io is the same code in the public repo. cocompute.io is the hosted version for people who don't want to operate their own orchestrator."
+                                    "cocompute is free software you can self-host, fork, and modify. The code that runs cocompute.ai is the same code in the public repo. cocompute.ai is the hosted version for people who don't want to operate their own orchestrator."
                                 </p>
                                 <div class="mt-5 flex flex-wrap gap-3">
                                     <a href="https://github.com/dsegovia90/cocompute" target="_blank" rel="noopener" class="rounded-lg bg-[#27272A] border border-[#3F3F46] px-5 py-2.5 text-[#A1A1AA] text-sm font-semibold hover:text-white hover:border-[#52525B] transition flex items-center gap-2">
@@ -173,10 +173,10 @@ fn Landing(logged_in: bool) -> impl IntoView {
                                 <CheckItem text="Modify, fork, extend"/>
                             </ul>
                         </Card>
-                        // Hosted on cocompute.io
+                        // Hosted on cocompute.ai
                         <div class="rounded-xl bg-[#16161E] border-2 border-indigo-500 p-8 flex flex-col gap-6">
                             <div>
-                                <h3 class="text-white text-2xl font-bold">"cocompute.io"</h3>
+                                <h3 class="text-white text-2xl font-bold">"cocompute.ai"</h3>
                                 <p class="mt-2 text-emerald-500 text-4xl font-bold">"Free to start"</p>
                                 <p class="mt-1 text-[#71717A] text-sm">"Hosted orchestrator · zero ops"</p>
                             </div>

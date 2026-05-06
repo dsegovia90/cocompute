@@ -2,13 +2,13 @@
 
 **Effective date:** 2026-05-05
 
-These Terms govern your use of cocompute.io (the "Service"), operated by cocompute (the "Operator"). By signing up, registering a host, or making API calls against the Service, you agree to these Terms.
+These Terms govern your use of cocompute.ai (the "Service"), operated by cocompute (the "Operator"). By signing up, registering a host, or making API calls against the Service, you agree to these Terms.
 
-These Terms cover the cocompute.io hosted service. The cocompute software is open source under AGPLv3; running your own orchestrator from the source code is not subject to these Terms (it's subject to the AGPL license alone).
+These Terms cover the cocompute.ai hosted service. The cocompute software is open source under AGPLv3; running your own orchestrator from the source code is not subject to these Terms (it's subject to the AGPL license alone).
 
 ## 1. The Service
 
-cocompute.io provides a coordination layer that lets users share GPU compute and consume LLM inference through a cooperative pool. The Service consists of:
+cocompute.ai provides a coordination layer that lets users share GPU compute and consume LLM inference through a cooperative pool. The Service consists of:
 
 - A web dashboard for account management, host registration, pool creation, and API key management
 - An OpenAI-compatible HTTP API at `/v1/`
@@ -77,7 +77,7 @@ TO THE MAXIMUM EXTENT PERMITTED BY LAW, THE OPERATOR'S AGGREGATE LIABILITY FOR A
 
 ## 13. Termination
 
-You may terminate your account at any time by deleting it from the dashboard or by emailing terms@cocompute.io. We may terminate your account immediately for material violations of these Terms or the AUP. Upon termination, your data may be deleted; metering records and audit logs may be retained for legal compliance.
+You may terminate your account at any time by deleting it from the dashboard or by emailing terms@cocompute.ai. We may terminate your account immediately for material violations of these Terms or the AUP. Upon termination, your data may be deleted; metering records and audit logs may be retained for legal compliance.
 
 The following sections survive termination: 8 (Intellectual Property), 10 (Indemnification), 11 (Disclaimer), 12 (Limitation of Liability), 14 (Governing Law), and 15 (Changes).
 
@@ -87,11 +87,11 @@ These Terms are governed by the laws of [JURISDICTION TBD — Daniel to fill in 
 
 ## 15. Changes
 
-We may update these Terms from time to time. Material changes will be announced via email to the address on your account or via a notice on cocompute.io. Continued use of the Service after the changes take effect constitutes acceptance.
+We may update these Terms from time to time. Material changes will be announced via email to the address on your account or via a notice on cocompute.ai. Continued use of the Service after the changes take effect constitutes acceptance.
 
 ## 16. Contact
 
-Questions about these Terms: terms@cocompute.io
+Questions about these Terms: terms@cocompute.ai
 
 ---
 

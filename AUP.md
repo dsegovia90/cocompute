@@ -2,7 +2,7 @@
 
 **Effective date:** 2026-05-05
 
-This Acceptable Use Policy ("AUP") governs your use of cocompute.io (the "Service"). It is incorporated by reference into the [Terms of Service](./TERMS.md). Violations may result in immediate suspension or termination of your account, revocation of your API keys, removal of your hosts from the network, or all of the above.
+This Acceptable Use Policy ("AUP") governs your use of cocompute.ai (the "Service"). It is incorporated by reference into the [Terms of Service](./TERMS.md). Violations may result in immediate suspension or termination of your account, revocation of your API keys, removal of your hosts from the network, or all of the above.
 
 ## 1. What you must not do
 
@@ -64,7 +64,7 @@ If you operate a host, see the [Host Operator Agreement](./HOST-AGREEMENT.md). B
 
 ## 4. Reporting abuse
 
-If you encounter abuse or suspect a violation of this AUP, please report it to abuse@cocompute.io. Include:
+If you encounter abuse or suspect a violation of this AUP, please report it to abuse@cocompute.ai. Include:
 
 - The pool, host_id, or API key prefix involved (if known)
 - Approximate timestamp
@@ -92,14 +92,14 @@ We may inspect metering records, request logs, and other server-side data to inv
 
 ## 7. Appeals
 
-If your account is suspended or terminated and you believe the decision was in error, email appeals@cocompute.io within 30 days. Include the affected account email and a description of why you believe the action was incorrect. We will respond within 14 days.
+If your account is suspended or terminated and you believe the decision was in error, email appeals@cocompute.ai within 30 days. Include the affected account email and a description of why you believe the action was incorrect. We will respond within 14 days.
 
 ## 8. Updates to this policy
 
-We may update this AUP as the Service evolves and as we encounter abuse patterns we did not anticipate. Material changes will be announced via email and on cocompute.io. Continued use of the Service after the changes take effect constitutes acceptance.
+We may update this AUP as the Service evolves and as we encounter abuse patterns we did not anticipate. Material changes will be announced via email and on cocompute.ai. Continued use of the Service after the changes take effect constitutes acceptance.
 
 ## 9. Contact
 
-Questions: aup@cocompute.io
-Abuse reports: abuse@cocompute.io
-Appeals: appeals@cocompute.io
+Questions: aup@cocompute.ai
+Abuse reports: abuse@cocompute.ai
+Appeals: appeals@cocompute.ai
