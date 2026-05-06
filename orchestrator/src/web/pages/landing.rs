@@ -134,25 +134,18 @@ fn Landing(logged_in: bool) -> impl IntoView {
                 // ── Open Source ──
                 <section class="px-6 py-16 flex flex-col items-center">
                     <div class="max-w-3xl w-full rounded-2xl bg-gradient-to-br from-[#16161E] to-[#0E0E15] border border-[#27272A] p-10">
-                        <div class="flex items-start gap-4">
-                            <div class="shrink-0 rounded-lg bg-[#27272A] p-3">
-                                <Icon name="github" class="w-6 h-6 text-white"/>
-                            </div>
-                            <div class="flex-1">
-                                <h2 class="text-white text-2xl font-bold">"Open source. AGPLv3."</h2>
-                                <p class="mt-2 text-[#A1A1AA] text-sm leading-relaxed">
-                                    "cocompute is free software you can self-host, fork, and modify. The code that runs cocompute.ai is the same code in the public repo. cocompute.ai is the hosted version for people who don't want to operate their own orchestrator."
-                                </p>
-                                <div class="mt-5 flex flex-wrap gap-3">
-                                    <a href="https://github.com/dsegovia90/cocompute" target="_blank" rel="noopener" class="rounded-lg bg-[#27272A] border border-[#3F3F46] px-5 py-2.5 text-[#A1A1AA] text-sm font-semibold hover:text-white hover:border-[#52525B] transition flex items-center gap-2">
-                                        <Icon name="github" class="w-4 h-4"/>
-                                        "github.com/dsegovia90/cocompute"
-                                    </a>
-                                    <a href="/quickstart" class="rounded-lg bg-[#27272A] border border-[#3F3F46] px-5 py-2.5 text-[#A1A1AA] text-sm font-semibold hover:text-white hover:border-[#52525B] transition">
-                                        "Self-hosting guide"
-                                    </a>
-                                </div>
-                            </div>
+                        <h2 class="text-white text-2xl font-bold">"Open source. AGPLv3."</h2>
+                        <p class="mt-2 text-[#A1A1AA] text-sm leading-relaxed">
+                            "cocompute is free software you can self-host, fork, and modify. The code that runs cocompute.ai is the same code in the public repo. cocompute.ai is the hosted version for people who don't want to operate their own orchestrator."
+                        </p>
+                        <div class="mt-5 flex flex-wrap gap-3">
+                            <a href="https://github.com/dsegovia90/cocompute" target="_blank" rel="noopener" class="rounded-lg bg-[#27272A] border border-[#3F3F46] px-5 py-2.5 text-[#A1A1AA] text-sm font-semibold hover:text-white hover:border-[#52525B] transition flex items-center gap-2">
+                                <Icon name="github" class="w-4 h-4"/>
+                                "github.com/dsegovia90/cocompute"
+                            </a>
+                            <a href="/quickstart" class="rounded-lg bg-[#27272A] border border-[#3F3F46] px-5 py-2.5 text-[#A1A1AA] text-sm font-semibold hover:text-white hover:border-[#52525B] transition">
+                                "Self-hosting guide"
+                            </a>
                         </div>
                     </div>
                 </section>
