@@ -84,7 +84,6 @@ pub async fn post_reset(
         }
     };
 
-    let secure = auth::is_https_base_url(&state.base_url);
-    let jar = jar.add(auth::make_session_cookie(&updated.pid, secure));
+    let jar = jar.add(auth::make_session_cookie(&state, &updated.pid));
     (jar, Redirect::to("/dashboard")).into_response()
 }
