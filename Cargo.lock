@@ -764,6 +764,7 @@ dependencies = [
  "dirs",
  "exec",
  "iroh",
+ "minisign-verify",
  "ollama-rs",
  "openssl",
  "rand 0.9.2",
@@ -3223,6 +3224,12 @@ dependencies = [
  "mime",
  "unicase",
 ]
+
+[[package]]
+name = "minisign-verify"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "22f9645cb765ea72b8111f36c522475d2daa0d22c957a9826437e97534bc4e9e"
 
 [[package]]
 name = "mio"
