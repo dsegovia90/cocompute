@@ -20,30 +20,85 @@ pub(crate) async fn get_version() -> Json<serde_json::Value> {
     }))
 }
 
-/// GET /v1/update/:platform — Serves host binary for the given platform.
-/// Platforms: linux-x86_64, linux-arm64, macos-arm64, macos-x86_64
+/// Platforms we publish host binaries for. Must match the `name` values in
+/// `.github/workflows/release.yml` and the `case "$OS"`/`case "$ARCH"` mapping
+/// in `orchestrator/static/install.sh`.
+const SUPPORTED_PLATFORMS: &[&str] = &[
+    "linux-x86_64",
+    "linux-arm64",
+    "macos-arm64",
+    "macos-x86_64",
+];
+
+/// GitHub repo slug for release artifacts. The orchestrator redirects host
+/// binary download requests to GitHub Releases, which serves them from a CDN
+/// without consuming orchestrator bandwidth.
+const RELEASES_REPO: &str = "dsegovia90/cocompute";
+
+/// GET /v1/update/:platform — Redirects to the GitHub Release artifact for the
+/// orchestrator's current version. The redirect target is:
+///
+///     https://github.com/{RELEASES_REPO}/releases/download/v{VERSION}/cocompute-host-{platform}
+///
+/// Clients (install.sh, the host binary's self-update flow) must follow the
+/// redirect. install.sh uses `curl -sSfL` and update.rs uses reqwest's default
+/// redirect-following behavior.
+///
+/// Sister artifact: cocompute-host-{platform}.minisig — the minisign signature
+/// for the binary. install.sh fetches both and verifies the signature before
+/// chmod +x.
+///
+/// Returns 404 for unknown platforms, 302 with Location header otherwise.
 pub(crate) async fn get_update(
     axum::extract::Path(platform): axum::extract::Path<String>,
 ) -> Result<axum::response::Response, AppError> {
-    let binary_path = format!("/opt/binaries/cocompute-host-{platform}");
-    let path = std::path::Path::new(&binary_path);
-
-    if !path.exists() {
-        return Err(AppError::Internal(anyhow::anyhow!(
-            "binary not found for platform: {platform}. Available: linux-x86_64, linux-arm64, macos-arm64, macos-x86_64"
+    if !SUPPORTED_PLATFORMS.contains(&platform.as_str()) {
+        return Err(AppError::NotFound(format!(
+            "unknown platform: {platform}. Supported: {}",
+            SUPPORTED_PLATFORMS.join(", ")
         )));
     }
 
-    let bytes = tokio::fs::read(path)
-        .await
-        .map_err(|e| AppError::Internal(anyhow::anyhow!("failed to read binary: {e}")))?;
+    let version = env!("CARGO_PKG_VERSION");
+    let url = format!(
+        "https://github.com/{RELEASES_REPO}/releases/download/v{version}/cocompute-host-{platform}"
+    );
 
     Ok(axum::response::Response::builder()
-        .header("content-type", "application/octet-stream")
-        .header(
-            "content-disposition",
-            format!("attachment; filename=\"cocompute-host-{platform}\""),
-        )
-        .body(axum::body::Body::from(bytes))
+        .status(axum::http::StatusCode::FOUND)
+        .header("location", url)
+        .header("cache-control", "no-cache")
+        .body(axum::body::Body::empty())
+        .unwrap())
+}
+
+/// GET /v1/update/:platform.minisig — Redirects to the minisign signature
+/// artifact for the host binary at the orchestrator's current version. install.sh
+/// fetches this immediately after the binary and verifies before chmod +x.
+pub(crate) async fn get_update_signature(
+    axum::extract::Path(platform): axum::extract::Path<String>,
+) -> Result<axum::response::Response, AppError> {
+    // Path comes in as "linux-x86_64.minisig"; strip the suffix to validate the platform.
+    let bare = platform
+        .strip_suffix(".minisig")
+        .ok_or_else(|| AppError::NotFound(format!("expected .minisig suffix, got: {platform}")))?;
+
+    if !SUPPORTED_PLATFORMS.contains(&bare) {
+        return Err(AppError::NotFound(format!(
+            "unknown platform: {bare}. Supported: {}",
+            SUPPORTED_PLATFORMS.join(", ")
+        )));
+    }
+
+    let version = env!("CARGO_PKG_VERSION");
+    let url = format!(
+        "https://github.com/{RELEASES_REPO}/releases/download/v{version}/cocompute-host-{bare}.minisig"
+    );
+
+    Ok(axum::response::Response::builder()
+        .status(axum::http::StatusCode::FOUND)
+        .header("location", url)
+        .header("cache-control", "no-cache")
+        .body(axum::body::Body::empty())
         .unwrap())
 }

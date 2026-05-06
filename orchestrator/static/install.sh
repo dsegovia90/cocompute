@@ -173,10 +173,53 @@ echo ""
 
 mkdir -p "$INSTALL_DIR"
 
+# Embedded minisign public key. The CI release pipeline signs each host binary
+# with the matching secret key; install.sh verifies the signature here before
+# executing the binary. This protects against a compromised cocompute.ai serving
+# a backdoored binary to fresh installers.
+#
+# To rotate: regenerate a passwordless keypair (`minisign -G -W`), replace this
+# string with the new public key, update MINISIGN_SECRET_KEY in GitHub Actions
+# secrets, cut a new release. Old installs continue to work with their
+# already-trusted binary.
+MINISIGN_PUBKEY="RWTk079UqKo+d0iStb/kLX57UVEZtKTrcGxY1Ap2yF001IQVijA3hbxF"
+
 echo "Downloading cocompute-host for $PLATFORM..."
-curl -sSf "$BASE_URL/v1/update/$PLATFORM" -o "$INSTALL_DIR/cocompute-host"
+# -L follows the redirect to GitHub Releases; orchestrator returns 302
+curl -sSfL "$BASE_URL/v1/update/$PLATFORM" -o "$INSTALL_DIR/cocompute-host"
+echo "  Downloaded binary to $INSTALL_DIR/cocompute-host"
+
+# Fetch the matching minisign signature. If the .minisig is missing (e.g., release
+# was cut without signing), the install fails here rather than running an unverified binary.
+echo "Downloading signature..."
+curl -sSfL "$BASE_URL/v1/update-sig/$PLATFORM.minisig" -o "$INSTALL_DIR/cocompute-host.minisig" || {
+    echo "ERROR: signature download failed. Refusing to install an unsigned binary."
+    rm -f "$INSTALL_DIR/cocompute-host"
+    exit 1
+}
+echo "  Signature downloaded"
+
+# Verify with minisign if installed; warn-and-continue with a clear message if not.
+# Most users will have minisign via brew on macOS or apt on Linux.
+if command -v minisign >/dev/null 2>&1; then
+    echo "Verifying signature..."
+    if ! minisign -V -P "$MINISIGN_PUBKEY" -m "$INSTALL_DIR/cocompute-host" -x "$INSTALL_DIR/cocompute-host.minisig"; then
+        echo "ERROR: signature verification FAILED. The binary at $BASE_URL may be compromised."
+        echo "       Do NOT run the downloaded binary. Report at security@cocompute.ai."
+        rm -f "$INSTALL_DIR/cocompute-host" "$INSTALL_DIR/cocompute-host.minisig"
+        exit 1
+    fi
+    echo "  Signature verified."
+else
+    echo "WARNING: minisign not installed; cannot verify the binary's signature."
+    echo "         Install minisign and re-run for cryptographic protection:"
+    echo "           macOS:  brew install minisign"
+    echo "           Linux:  apt install minisign  OR  dnf install minisign"
+    echo "         Continuing with UNVERIFIED binary in 5 seconds..."
+    sleep 5
+fi
+
 chmod +x "$INSTALL_DIR/cocompute-host"
-echo "  Downloaded to $INSTALL_DIR/cocompute-host"
 
 cat > "$INSTALL_DIR/config.toml" <<CONFEOF
 orchestrator_url = "$BASE_URL"

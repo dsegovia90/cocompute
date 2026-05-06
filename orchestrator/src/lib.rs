@@ -103,6 +103,7 @@ pub fn build_router(state: AppState, static_dir: &str, apply_rate_limits: bool) 
             .route("/v1/node-info", get(routes::system::get_node_info))
             .route("/v1/version", get(routes::system::get_version))
             .route("/v1/update/{platform}", get(routes::system::get_update))
+            .route("/v1/update-sig/{platform}", get(routes::system::get_update_signature))
             .layer(tower_http::trace::TraceLayer::new_for_http())
             .with_state(state)
     } else {
@@ -120,6 +121,7 @@ pub fn build_router(state: AppState, static_dir: &str, apply_rate_limits: bool) 
             .route("/v1/node-info", get(routes::system::get_node_info))
             .route("/v1/version", get(routes::system::get_version))
             .route("/v1/update/{platform}", get(routes::system::get_update))
+            .route("/v1/update-sig/{platform}", get(routes::system::get_update_signature))
             .with_state(state)
     }
 }

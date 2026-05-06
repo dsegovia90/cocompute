@@ -9,6 +9,7 @@ use serde_json::json;
 pub enum AppError {
     HostUnavailable,
     ModelNotFound { available: Vec<String> },
+    NotFound(String),
     Unauthorized,
     Internal(anyhow::Error),
 }
@@ -23,6 +24,10 @@ impl IntoResponse for AppError {
             AppError::ModelNotFound { ref available } => (
                 StatusCode::NOT_FOUND,
                 json!({ "error": "model not found", "available_models": available }),
+            ),
+            AppError::NotFound(ref msg) => (
+                StatusCode::NOT_FOUND,
+                json!({ "error": msg }),
             ),
             AppError::Unauthorized => (
                 StatusCode::UNAUTHORIZED,

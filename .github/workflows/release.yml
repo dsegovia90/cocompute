@@ -100,11 +100,37 @@ jobs:
           mkdir -p dist
           cp target/${{ matrix.target }}/release/cocompute_host dist/${{ matrix.name }}
 
+      - name: Install minisign
+        run: |
+          if [ "${{ runner.os }}" = "Linux" ]; then
+            sudo apt-get update && sudo apt-get install -y minisign
+          else
+            brew install minisign
+          fi
+
+      - name: Sign binary with minisign
+        env:
+          MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
+        run: |
+          # The secret key is passwordless (generated via `minisign -G -W`).
+          # Trust boundary is GitHub Secrets, not a passphrase: anyone who can
+          # read MINISIGN_SECRET_KEY already controls the repo, and adding a
+          # password that also lives in Secrets adds no real protection.
+          umask 077
+          mkdir -p ~/.minisign
+          printf '%s' "$MINISIGN_SECRET_KEY" > ~/.minisign/cocompute.key
+          # -W on the sign side: this key has no password.
+          minisign -S -W -s ~/.minisign/cocompute.key -m dist/${{ matrix.name }} -x dist/${{ matrix.name }}.minisig
+          rm -f ~/.minisign/cocompute.key
+          ls -la dist/
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.name }}
-          path: dist/${{ matrix.name }}
+          path: |
+            dist/${{ matrix.name }}
+            dist/${{ matrix.name }}.minisig
 
   release:
     needs: [detect-version, build-host]
