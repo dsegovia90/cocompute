@@ -1,25 +1,14 @@
-use std::sync::Arc;
-
-use axum::{Router, middleware, routing::{get, post}};
 use clap::{Parser, Subcommand};
+use cocompute_orchestrator::{
+    auth, build_router, db, email,
+    host_acceptor::HostAcceptor,
+    host_manager::HostManager,
+    AppState,
+};
 use common::protocols;
-use host_acceptor::HostAcceptor;
-use host_manager::HostManager;
 use iroh::Endpoint;
-use sea_orm::{ActiveModelTrait, Database, DatabaseConnection, Set};
+use sea_orm::{ActiveModelTrait, Database, Set};
 use sea_orm_migration::MigratorTrait;
-use tower_governor::{governor::GovernorConfigBuilder, GovernorLayer};
-
-mod auth;
-mod db;
-mod email;
-mod error;
-mod host_acceptor;
-mod host_manager;
-mod openai;
-mod proxy;
-mod routes;
-mod web;
 
 #[derive(Parser, Debug)]
 #[command(name = "cocompute-orchestrator", version)]
@@ -89,29 +78,6 @@ enum Command {
     },
 }
 
-#[derive(Clone)]
-pub(crate) struct AppState {
-    pub(crate) endpoint: Endpoint,
-    pub(crate) endpoint_id: String,
-    pub(crate) db: DatabaseConnection,
-    pub(crate) hosts: HostManager,
-    pub(crate) mailer: Option<std::sync::Arc<email::Mailer>>,
-    pub(crate) session_key: axum_extra::extract::cookie::Key,
-    pub(crate) base_url: String,
-    /// Cloudflare Turnstile site key (public). None disables captcha (dev).
-    pub(crate) turnstile_site_key: Option<String>,
-    /// Cloudflare Turnstile secret key (server-side). None disables captcha (dev).
-    pub(crate) turnstile_secret_key: Option<String>,
-    /// Shared HTTP client for outbound calls (Turnstile siteverify, etc.).
-    pub(crate) http: reqwest::Client,
-}
-
-impl axum::extract::FromRef<AppState> for axum_extra::extract::cookie::Key {
-    fn from_ref(state: &AppState) -> Self {
-        state.session_key.clone()
-    }
-}
-
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
@@ -125,12 +91,10 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("cocompute-orchestrator v{}", env!("CARGO_PKG_VERSION"));
 
-    // Initialize database
     let db_url = format!("sqlite://{}?mode=rwc", args.db_path);
     let db = Database::connect(&db_url).await?;
     db::migration::Migrator::up(&db, None).await?;
 
-    // Build mailer (None if SMTP not configured)
     let mailer = match &args.smtp_host {
         Some(host) => {
             let from = args.smtp_from.as_deref().unwrap_or("noreply@cocompute.ai");
@@ -185,14 +149,12 @@ async fn main() -> anyhow::Result<()> {
             use db::entities::{beta_invites, users};
             use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 
-            // Must have a beta invite
             let invite = beta_invites::Entity::find()
                 .filter(beta_invites::Column::Email.eq(&email))
                 .one(&db)
                 .await?
                 .ok_or_else(|| anyhow::anyhow!("no beta invite found for {email}"))?;
 
-            // Check if user already exists
             let existing = users::Entity::find()
                 .filter(users::Column::Email.eq(&email))
                 .one(&db)
@@ -243,7 +205,6 @@ async fn main() -> anyhow::Result<()> {
 
             let hosts = HostManager::new();
 
-            // Start iroh router to accept host connections
             let acceptor = HostAcceptor::new(hosts.clone(), db.clone());
             let _router = iroh::protocol::Router::builder(endpoint.clone())
                 .accept(protocols::ALPN, acceptor)
@@ -272,65 +233,7 @@ async fn main() -> anyhow::Result<()> {
                     .expect("failed to build reqwest client"),
             };
 
-            // Per-IP rate limit on POST /beta: ~10 requests per minute per source IP.
-            // Stops bot spam against the open signup form. SmartIpKeyExtractor honors
-            // X-Forwarded-For / Forwarded headers so this works behind reverse proxies.
-            let beta_governor = Arc::new(
-                GovernorConfigBuilder::default()
-                    .per_second(6)
-                    .burst_size(10)
-                    .use_headers()
-                    .finish()
-                    .expect("invalid /beta governor config"),
-            );
-
-            // Per-IP rate limit on /v1/* (the OpenAI-compatible inference API):
-            // ~60 requests per minute per source IP. Generous for legitimate usage,
-            // painful for a stolen-key flooder. Per-key rate-limiting is a Sprint 2 follow-up.
-            let v1_governor = Arc::new(
-                GovernorConfigBuilder::default()
-                    .per_second(1)
-                    .burst_size(60)
-                    .use_headers()
-                    .finish()
-                    .expect("invalid /v1 governor config"),
-            );
-
-            // Periodic cleanup so the in-memory IP map doesn't grow unbounded.
-            let beta_limiter = beta_governor.limiter().clone();
-            let v1_limiter = v1_governor.limiter().clone();
-            tokio::spawn(async move {
-                loop {
-                    tokio::time::sleep(std::time::Duration::from_secs(60)).await;
-                    beta_limiter.retain_recent();
-                    v1_limiter.retain_recent();
-                }
-            });
-
-            let beta_rate_limited = Router::new()
-                .route("/beta", post(web::post_beta))
-                .layer(GovernorLayer::new(beta_governor));
-
-            let app = Router::new()
-                // Authenticated /v1/* routes (rate limit applied AFTER auth so the
-                // governor only counts authenticated requests; unauthenticated
-                // requests get rejected at auth and never reach the limiter).
-                .route("/v1/models", get(routes::models::list_models))
-                .route("/v1/embeddings", post(routes::embeddings::create_embeddings))
-                .route("/v1/chat/completions", post(routes::chat::create_chat_completion))
-                .route("/v1/stats", get(routes::stats::get_stats))
-                .route_layer(GovernorLayer::new(v1_governor))
-                .route_layer(middleware::from_fn_with_state(db, auth::require_api_key))
-                // Web UI (GET /beta is unauthenticated and unlimited)
-                .merge(web::router(&args.static_dir))
-                // POST /beta with the dedicated per-IP rate limiter
-                .merge(beta_rate_limited)
-                // Host discovery + updates (unauthenticated, no rate limit needed)
-                .route("/v1/node-info", get(routes::system::get_node_info))
-                .route("/v1/version", get(routes::system::get_version))
-                .route("/v1/update/{platform}", get(routes::system::get_update))
-                .layer(tower_http::trace::TraceLayer::new_for_http())
-                .with_state(state);
+            let app = build_router(state, &args.static_dir, true);
 
             let addr = format!("0.0.0.0:{}", args.port);
             let listener = tokio::net::TcpListener::bind(&addr).await?;
