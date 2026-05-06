@@ -1,3 +1,19 @@
+cocompute is licensed under the GNU Affero General Public License v3.0
+(AGPLv3, full text below).
+
+Contributors sign a CLA (see CLA.md) granting cocompute (the project) the
+right to also license contributions under non-AGPL terms. This is the
+standard dual-licensing model used by HashiCorp, papermark.io, Sentry, and
+many open-source companies. It enables the project to offer a hosted
+commercial version (cocompute.ai) without forcing all derivatives to
+inherit AGPL semantics.
+
+If you are using this code, the license that governs your use is AGPLv3.
+The dual-licensing right exists between contributors and the project; it
+does not change your obligations as a user.
+
+----------------------------------------------------------------------
+
                     GNU AFFERO GENERAL PUBLIC LICENSE
                        Version 3, 19 November 2007
 
