@@ -1,14 +1,13 @@
 use axum::{
+    Form,
     extract::State,
     response::{IntoResponse, Redirect, Response},
-    Form,
 };
 use serde::Deserialize;
 
 use crate::{
-    email,
+    AppState, email,
     signup::{self, SignupError, SignupInput},
-    AppState,
 };
 
 #[derive(Deserialize)]
@@ -47,7 +46,10 @@ async fn verify_turnstile(
 
     let response = http
         .post("https://challenges.cloudflare.com/turnstile/v0/siteverify")
-        .header(reqwest::header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+        .header(
+            reqwest::header::CONTENT_TYPE,
+            "application/x-www-form-urlencoded",
+        )
         .body(body)
         .send()
         .await
@@ -72,18 +74,14 @@ async fn verify_turnstile(
 /// Open signup. Captcha gate, then create the user immediately + send a
 /// verification email. The user clicks the link, sets a real password, and
 /// is in. No manual invite-user CLI step required.
-pub async fn post_beta(
-    State(state): State<AppState>,
-    Form(form): Form<BetaForm>,
-) -> Response {
+pub async fn post_beta(State(state): State<AppState>, Form(form): Form<BetaForm>) -> Response {
     // Captcha gate: only enforce when both site_key and secret_key are set
     // (lets local dev work without Turnstile credentials).
     if let Some(secret) = state.turnstile_secret_key.as_deref() {
         let token = match form.cf_turnstile_response.as_deref() {
             Some(t) if !t.is_empty() => t,
             _ => {
-                return Redirect::to("/beta?error=Please+complete+the+captcha")
-                    .into_response();
+                return Redirect::to("/beta?error=Please+complete+the+captcha").into_response();
             }
         };
         if let Err(reason) = verify_turnstile(&state.http, secret, token).await {
@@ -106,10 +104,11 @@ pub async fn post_beta(
     let signup_result = match result {
         Ok(r) => r,
         Err(SignupError::UserAlreadyExists) => {
-            return Redirect::to(
-                "/beta?error=That+email+is+already+signed+up.+Try+logging+in.",
-            )
-            .into_response();
+            tracing::info!(
+                "signup attempted with existing email {} — returning generic success",
+                form.email
+            );
+            return Redirect::to("/beta?success=true").into_response();
         }
         Err(SignupError::Db(e)) => {
             tracing::error!("signup db error: {e}");
