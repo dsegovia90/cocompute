@@ -1,9 +1,6 @@
 use clap::{Parser, Subcommand};
 use cocompute_orchestrator::{
-    auth, build_router, db, email,
-    host_acceptor::HostAcceptor,
-    host_manager::HostManager,
-    AppState,
+    AppState, auth, build_router, db, email, host_acceptor::HostAcceptor, host_manager::HostManager,
 };
 use common::protocols;
 use iroh::Endpoint;
@@ -22,7 +19,11 @@ struct Args {
     db_path: String,
 
     /// Static files directory
-    #[arg(long, default_value = "orchestrator/static", env = "COCOMPUTE_STATIC_DIR")]
+    #[arg(
+        long,
+        default_value = "orchestrator/static",
+        env = "COCOMPUTE_STATIC_DIR"
+    )]
     static_dir: String,
 
     /// Session signing secret (64+ bytes). Generated randomly if not set (sessions won't survive restarts).
@@ -30,7 +31,11 @@ struct Args {
     session_secret: Option<String>,
 
     /// Public base URL (for email links)
-    #[arg(long, env = "COCOMPUTE_BASE_URL", default_value = "http://localhost:4000")]
+    #[arg(
+        long,
+        env = "COCOMPUTE_BASE_URL",
+        default_value = "http://localhost:4000"
+    )]
     base_url: String,
 
     /// SMTP host (defaults to localhost for Mailpit)
@@ -142,7 +147,9 @@ async fn main() -> anyhow::Result<()> {
     let session_key = match &args.session_secret {
         Some(secret) => axum_extra::extract::cookie::Key::from(secret.as_bytes()),
         None => {
-            tracing::warn!("COCOMPUTE_SESSION_SECRET not set — using ephemeral key (sessions won't survive restarts)");
+            tracing::warn!(
+                "COCOMPUTE_SESSION_SECRET not set — using ephemeral key (sessions won't survive restarts)"
+            );
             axum_extra::extract::cookie::Key::generate()
         }
     };
@@ -204,7 +211,9 @@ async fn main() -> anyhow::Result<()> {
 
             if let Some(ref mailer) = mailer {
                 let parts = email::templates::invite_email(&invite.name, &token, &args.base_url);
-                mailer.send(&email, &parts.subject, &parts.html, &parts.text).await?;
+                mailer
+                    .send(&email, &parts.subject, &parts.html, &parts.text)
+                    .await?;
                 println!("Invite email sent.");
             } else {
                 println!("Mailer not configured — share the verification URL manually.");
@@ -232,7 +241,9 @@ async fn main() -> anyhow::Result<()> {
             if args.turnstile_site_key.is_some() && args.turnstile_secret_key.is_some() {
                 tracing::info!("Turnstile captcha enabled for /beta signup");
             } else {
-                tracing::warn!("TURNSTILE_SITE_KEY/TURNSTILE_SECRET_KEY not set — captcha disabled (dev mode)");
+                tracing::warn!(
+                    "TURNSTILE_SITE_KEY/TURNSTILE_SECRET_KEY not set — captcha disabled (dev mode)"
+                );
             }
 
             let state = AppState {
@@ -256,12 +267,7 @@ async fn main() -> anyhow::Result<()> {
             let addr = format!("0.0.0.0:{}", args.port);
             let listener = tokio::net::TcpListener::bind(&addr).await?;
             tracing::info!("listening on {addr}");
-            // `into_make_service_with_connect_info::<SocketAddr>()` makes the
-            // peer connection IP available via the ConnectInfo extension.
-            // tower-governor's SmartIpKeyExtractor needs this to rate-limit by
-            // source IP when X-Forwarded-For isn't set (e.g., direct localhost
-            // connections in dev). Without it, the extractor errors and the
-            // request fails with 500 before reaching the handler.
+
             axum::serve(
                 listener,
                 app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
