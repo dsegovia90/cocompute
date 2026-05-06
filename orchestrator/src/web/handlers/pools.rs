@@ -1,7 +1,7 @@
 use axum::{
+    Form,
     extract::State,
     response::{IntoResponse, Redirect, Response},
-    Form,
 };
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 use serde::Deserialize;
@@ -10,9 +10,9 @@ use fake::Fake;
 use fake::faker::lorem::en::Word;
 
 use crate::{
+    AppState,
     auth::CurrentUser,
     db::entities::{api_keys, host_pool_memberships, pool_members, pools},
-    AppState,
 };
 
 fn random_pool_name() -> String {
@@ -161,7 +161,10 @@ pub async fn invite_member(
             &pool.name,
             &format!("{}/pools/{}/accept", state.base_url, pool.pid),
         );
-        if let Err(e) = mailer.send(&invitee.email, &parts.subject, &parts.html, &parts.text).await {
+        if let Err(e) = mailer
+            .send(&invitee.email, &parts.subject, &parts.html, &parts.text)
+            .await
+        {
             tracing::warn!("failed to send pool invite email: {e}");
         }
     }
@@ -236,6 +239,7 @@ pub async fn add_host_to_pool(
     let is_member = pool_members::Entity::find()
         .filter(pool_members::Column::PoolId.eq(pool.id))
         .filter(pool_members::Column::UserId.eq(user.id))
+        .filter(pool_members::Column::AcceptedAt.is_not_null())
         .one(&state.db)
         .await
         .ok()
@@ -439,7 +443,10 @@ pub async fn remove_host_from_pool(
         .await
         .unwrap_or_default();
     let pool_ids: Vec<i32> = active_memberships.iter().map(|m| m.pool_id).collect();
-    state.hosts.update_pool_ids(&host_endpoint_id, pool_ids).await;
+    state
+        .hosts
+        .update_pool_ids(&host_endpoint_id, pool_ids)
+        .await;
 
     Redirect::to("/dashboard?saved=true").into_response()
 }
