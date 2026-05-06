@@ -3,10 +3,13 @@ use axum::{
     response::{IntoResponse, Redirect, Response},
     Form,
 };
-use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 use serde::Deserialize;
 
-use crate::{db::entities::beta_invites, email, AppState};
+use crate::{
+    email,
+    signup::{self, SignupError, SignupInput},
+    AppState,
+};
 
 #[derive(Deserialize)]
 pub struct BetaForm {
@@ -66,7 +69,9 @@ async fn verify_turnstile(
     Ok(())
 }
 
-/// Save a beta invite to the waitlist and send a confirmation email.
+/// Open signup. Captcha gate, then create the user immediately + send a
+/// verification email. The user clicks the link, sets a real password, and
+/// is in. No manual invite-user CLI step required.
 pub async fn post_beta(
     State(state): State<AppState>,
     Form(form): Form<BetaForm>,
@@ -87,34 +92,69 @@ pub async fn post_beta(
         }
     }
 
-    let existing = beta_invites::Entity::find()
-        .filter(beta_invites::Column::Email.eq(&form.email))
-        .one(&state.db)
-        .await;
+    let result = signup::create_user_and_invite(
+        &state.db,
+        SignupInput {
+            name: form.name.clone(),
+            email: form.email.clone(),
+            role: form.role.clone(),
+            gpu: form.gpu.clone(),
+        },
+    )
+    .await;
 
-    if let Ok(Some(_)) = existing {
-        return Redirect::to("/beta?error=That+email+is+already+on+the+list").into_response();
-    }
-
-    let invite = beta_invites::ActiveModel {
-        name: Set(form.name.clone()),
-        email: Set(form.email.clone()),
-        role: Set(form.role.clone()),
-        gpu_info: Set(form.gpu.filter(|g| !g.is_empty())),
-        created_at: Set(chrono::Utc::now()),
-        ..Default::default()
+    let signup_result = match result {
+        Ok(r) => r,
+        Err(SignupError::UserAlreadyExists) => {
+            return Redirect::to(
+                "/beta?error=That+email+is+already+signed+up.+Try+logging+in.",
+            )
+            .into_response();
+        }
+        Err(SignupError::Db(e)) => {
+            tracing::error!("signup db error: {e}");
+            return Redirect::to("/beta?error=Something+went+wrong").into_response();
+        }
+        Err(SignupError::Hash(e)) => {
+            tracing::error!("signup hash error: {e}");
+            return Redirect::to("/beta?error=Something+went+wrong").into_response();
+        }
     };
 
-    if let Err(e) = invite.insert(&state.db).await {
-        tracing::error!("failed to save beta invite: {e}");
-        return Redirect::to("/beta?error=Something+went+wrong").into_response();
-    }
-
+    // Send verification email. If sending fails, the user is created in DB
+    // but no email arrives — log loudly so the operator can manually surface
+    // the verification link from a CLI/log query if needed.
     if let Some(ref mailer) = state.mailer {
-        let parts = email::templates::waitlist_email(&form.email);
-        if let Err(e) = mailer.send(&form.email, &parts.subject, &parts.html, &parts.text).await {
-            tracing::warn!("failed to send waitlist email: {e}");
+        let parts = email::templates::invite_email(
+            &signup_result.user.name,
+            &signup_result.verification_token,
+            &state.base_url,
+        );
+        if let Err(e) = mailer
+            .send(
+                &signup_result.user.email,
+                &parts.subject,
+                &parts.html,
+                &parts.text,
+            )
+            .await
+        {
+            tracing::warn!(
+                "failed to send verification email to {}: {e}",
+                signup_result.user.email
+            );
         }
+    } else {
+        // Mailer not configured (local dev) — print the verify URL so the
+        // operator can complete signup manually.
+        let verify_url = format!(
+            "{}/verify?token={}",
+            state.base_url, signup_result.verification_token
+        );
+        tracing::warn!(
+            "SMTP not configured — manual verify URL for {}: {verify_url}",
+            signup_result.user.email
+        );
     }
 
     Redirect::to("/beta?success=true").into_response()

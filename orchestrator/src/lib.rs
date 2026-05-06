@@ -18,6 +18,7 @@ pub mod host_manager;
 pub mod openai;
 pub mod proxy;
 pub mod routes;
+pub mod signup;
 pub mod web;
 
 use host_manager::HostManager;

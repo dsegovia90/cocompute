@@ -1,6 +1,7 @@
 use clap::{Parser, Subcommand};
 use cocompute_orchestrator::{
     AppState, auth, build_router, db, email, host_acceptor::HostAcceptor, host_manager::HostManager,
+    signup::{self, SignupError, SignupInput},
 };
 use common::protocols;
 use iroh::Endpoint;
@@ -171,7 +172,11 @@ async fn main() -> anyhow::Result<()> {
             Ok(())
         }
         Command::InviteUser { email } => {
-            use db::entities::{beta_invites, users};
+            // Operator override: manually create a user from a beta_invite that's
+            // already in the DB (e.g., legacy waitlist data, or a friend you want
+            // in fast). The web POST /beta path handles all normal signups now;
+            // this CLI subcommand is the escape hatch.
+            use db::entities::beta_invites;
             use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 
             let invite = beta_invites::Entity::find()
@@ -180,37 +185,42 @@ async fn main() -> anyhow::Result<()> {
                 .await?
                 .ok_or_else(|| anyhow::anyhow!("no beta invite found for {email}"))?;
 
-            let existing = users::Entity::find()
-                .filter(users::Column::Email.eq(&email))
-                .one(&db)
-                .await?;
-            if existing.is_some() {
-                anyhow::bail!("user with email {email} already exists");
-            }
+            let result = signup::create_user_and_invite(
+                &db,
+                SignupInput {
+                    name: invite.name.clone(),
+                    email: email.clone(),
+                    role: invite.role.clone(),
+                    gpu: invite.gpu_info.clone(),
+                },
+            )
+            .await;
 
-            let pid = uuid::Uuid::new_v4().to_string();
-            let token = auth::generate_api_key();
-            let throwaway_password = auth::hash_password(auth::generate_api_key()).await?;
-
-            let user = users::ActiveModel {
-                pid: Set(pid),
-                email: Set(email.clone()),
-                password_hash: Set(throwaway_password),
-                name: Set(invite.name.clone()),
-                email_verification_token: Set(Some(token.clone())),
-                email_verification_sent_at: Set(Some(chrono::Utc::now())),
-                created_at: Set(chrono::Utc::now()),
-                updated_at: Set(chrono::Utc::now()),
-                ..Default::default()
+            let signup_result = match result {
+                Ok(r) => r,
+                Err(SignupError::UserAlreadyExists) => {
+                    anyhow::bail!("user with email {email} already exists");
+                }
+                Err(SignupError::Db(e)) => return Err(e.into()),
+                Err(SignupError::Hash(e)) => return Err(e),
             };
-            user.insert(&db).await?;
 
-            let verify_url = format!("{}/verify?token={}", args.base_url, token);
-            println!("User created for {} ({email})", invite.name);
+            let verify_url = format!(
+                "{}/verify?token={}",
+                args.base_url, signup_result.verification_token
+            );
+            println!(
+                "User created for {} ({email})",
+                signup_result.user.name
+            );
             println!("Verification URL: {verify_url}");
 
             if let Some(ref mailer) = mailer {
-                let parts = email::templates::invite_email(&invite.name, &token, &args.base_url);
+                let parts = email::templates::invite_email(
+                    &signup_result.user.name,
+                    &signup_result.verification_token,
+                    &args.base_url,
+                );
                 mailer
                     .send(&email, &parts.subject, &parts.html, &parts.text)
                     .await?;

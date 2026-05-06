@@ -107,13 +107,22 @@ fn BetaInvite(error: Option<String>, turnstile_site_key: Option<String>) -> impl
 #[component]
 fn BetaConfirmation() -> impl IntoView {
     view! {
-        <Base title="cocompute — you're on the list">
+        <Base title="cocompute — check your email">
             <PageShell>
                 <div class="flex items-center justify-center min-h-screen">
-                    <div class="w-[400px] rounded-xl bg-[#16161E] border border-[#27272A] px-10 pt-12 pb-10 flex flex-col gap-5 items-center text-center">
-                        <h1 class="text-white text-2xl font-bold">"You're on the list!"</h1>
-                        <p class="text-[#71717A] text-sm">"Thanks for signing up. We'll reach out when a spot opens up."</p>
-                        <a href="/" class="text-indigo-500 text-sm font-medium hover:underline">"Back to home"</a>
+                    <div class="w-[440px] rounded-xl bg-[#16161E] border border-[#27272A] px-10 pt-12 pb-10 flex flex-col gap-5 items-center text-center">
+                        <h1 class="text-white text-2xl font-bold">"Check your email"</h1>
+                        <p class="text-[#A1A1AA] text-sm leading-relaxed">
+                            "We sent a verification link to your email. Click it to set your password and finish setting up your account."
+                        </p>
+                        <p class="text-[#52525B] text-xs">
+                            "Didn't get it? Check your spam folder, or wait a minute and refresh."
+                        </p>
+                        <div class="flex gap-3 mt-2">
+                            <a href="/" class="text-indigo-500 text-sm font-medium hover:underline">"Back to home"</a>
+                            <span class="text-[#3F3F46] text-sm">"·"</span>
+                            <a href="/login" class="text-indigo-500 text-sm font-medium hover:underline">"Sign in"</a>
+                        </div>
                     </div>
                 </div>
             </PageShell>
