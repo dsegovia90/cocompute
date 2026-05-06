@@ -1,17 +1,17 @@
 use axum::{
+    Form,
     extract::State,
     response::{Html, IntoResponse, Redirect, Response},
-    Form,
 };
 use leptos::prelude::*;
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 use serde::Deserialize;
 
 use crate::{
+    AppState,
     auth::{self, CurrentUser},
     db::entities::{api_keys, pool_members, pools},
     web::components::*,
-    AppState,
 };
 
 #[derive(Deserialize)]
@@ -65,10 +65,10 @@ pub async fn create_pool_api_key(
         _ => return Redirect::to("/dashboard").into_response(),
     };
 
-    // Check user is owner or member
     let is_member = pool_members::Entity::find()
         .filter(pool_members::Column::PoolId.eq(pool.id))
         .filter(pool_members::Column::UserId.eq(user.id))
+        .filter(pool_members::Column::AcceptedAt.is_not_null())
         .one(&state.db)
         .await
         .ok()
@@ -98,11 +98,15 @@ pub async fn create_pool_api_key(
         return Redirect::to("/dashboard").into_response();
     }
 
-    Html(crate::web::render(ApiKeyCreatedPage(ApiKeyCreatedPageProps {
-        key: raw_key,
-        pool_name: pool.name,
-        label: label.unwrap_or_default(),
-    })).0).into_response()
+    Html(
+        crate::web::render(ApiKeyCreatedPage(ApiKeyCreatedPageProps {
+            key: raw_key,
+            pool_name: pool.name,
+            label: label.unwrap_or_default(),
+        }))
+        .0,
+    )
+    .into_response()
 }
 
 /// Create a global pool API key. Requires membership in the global pool.
@@ -123,10 +127,10 @@ pub async fn create_global_api_key(
         _ => return Redirect::to("/dashboard").into_response(),
     };
 
-    // Verify user is a member of the global pool
     let is_member = pool_members::Entity::find()
         .filter(pool_members::Column::PoolId.eq(global_pool.id))
         .filter(pool_members::Column::UserId.eq(user.id))
+        .filter(pool_members::Column::AcceptedAt.is_not_null())
         .one(&state.db)
         .await
         .ok()
@@ -156,11 +160,15 @@ pub async fn create_global_api_key(
         return Redirect::to("/dashboard").into_response();
     }
 
-    Html(crate::web::render(ApiKeyCreatedPage(ApiKeyCreatedPageProps {
-        key: raw_key,
-        pool_name: "Global Pool".to_string(),
-        label: label.unwrap_or_default(),
-    })).0).into_response()
+    Html(
+        crate::web::render(ApiKeyCreatedPage(ApiKeyCreatedPageProps {
+            key: raw_key,
+            pool_name: "Global Pool".to_string(),
+            label: label.unwrap_or_default(),
+        }))
+        .0,
+    )
+    .into_response()
 }
 
 #[derive(Deserialize)]
@@ -186,7 +194,11 @@ pub async fn rename_api_key(
     };
 
     let label = form.label.trim().to_string();
-    let label = if label.is_empty() || label == "unnamed" { None } else { Some(label) };
+    let label = if label.is_empty() || label == "unnamed" {
+        None
+    } else {
+        Some(label)
+    };
 
     let mut active: api_keys::ActiveModel = key.into();
     active.label = Set(label);
