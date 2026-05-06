@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: AGPL-3.0-only
-
 use common::protocols::chat::{ChatMessage, ToolCall, ToolCallFunction, ToolDefinition};
 use ollama_rs::generation::{
     chat::{ChatMessage as OllamaChatMessage, MessageRole},

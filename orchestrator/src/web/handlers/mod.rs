@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: AGPL-3.0-only
-
 mod api_keys;
 mod beta;
 mod forgot;

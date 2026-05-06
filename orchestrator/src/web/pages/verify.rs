@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: AGPL-3.0-only
-
 use axum::{extract::Query, response::Html};
 use leptos::prelude::*;
 use serde::Deserialize;

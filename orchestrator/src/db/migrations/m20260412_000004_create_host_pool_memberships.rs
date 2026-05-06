@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: AGPL-3.0-only
-
 use sea_orm_migration::prelude::*;
 
 pub struct M20260412CreateHostPoolMemberships;

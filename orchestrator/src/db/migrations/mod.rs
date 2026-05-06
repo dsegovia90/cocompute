@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: AGPL-3.0-only
-
 mod m20260325_create_api_keys;
 mod m20260325_create_hosts;
 mod m20260325_create_metering_logs;

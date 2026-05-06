@@ -2,6 +2,8 @@
 name = "cocompute_orchestrator"
 version.workspace = true
 edition = "2024"
+license.workspace = true
+repository.workspace = true
 
 [dependencies]
 anyhow = { workspace = true }

@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: AGPL-3.0-only
-
 /// Detect the current platform string for update downloads.
 pub(crate) fn current_platform() -> &'static str {
     match (std::env::consts::OS, std::env::consts::ARCH) {

@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: AGPL-3.0-only
-
 pub mod api_keys;
 pub mod beta_invites;
 pub mod host_pool_memberships;

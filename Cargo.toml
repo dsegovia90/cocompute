@@ -4,6 +4,8 @@ members = ["common", "host", "orchestrator"]
 
 [workspace.package]
 version = "0.6.0"
+license = "AGPL-3.0-only"
+repository = "https://github.com/dsegovia90/cocompute"
 
 [workspace.dependencies]
 anyhow = "1.0"
