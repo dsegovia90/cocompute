@@ -6,11 +6,15 @@ mod pages;
 use axum::{Router, response::Html, routing::{get, post}};
 use leptos::prelude::*;
 
+// Re-exported so main.rs can wrap it in a rate-limited sub-router.
+pub use handlers::post_beta;
+
 pub fn router(static_dir: &str) -> Router<crate::AppState> {
     Router::new()
         .route("/", get(pages::landing::landing))
         .route("/quickstart", get(pages::quickstart::quickstart))
-        .route("/beta", get(pages::beta::beta).post(handlers::post_beta))
+        // POST /beta is mounted separately in main.rs with a per-IP rate limiter.
+        .route("/beta", get(pages::beta::beta))
         .route("/login", get(pages::login::login).post(handlers::post_login))
         .route("/logout", post(handlers::post_logout))
         .route("/verify", get(pages::verify::verify_page).post(handlers::post_verify))

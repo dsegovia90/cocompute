@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use axum::{Router, middleware, routing::{get, post}};
 use clap::{Parser, Subcommand};
 use common::protocols;
@@ -6,6 +8,7 @@ use host_manager::HostManager;
 use iroh::Endpoint;
 use sea_orm::{ActiveModelTrait, Database, DatabaseConnection, Set};
 use sea_orm_migration::MigratorTrait;
+use tower_governor::{governor::GovernorConfigBuilder, GovernorLayer};
 
 mod auth;
 mod db;
@@ -269,16 +272,60 @@ async fn main() -> anyhow::Result<()> {
                     .expect("failed to build reqwest client"),
             };
 
+            // Per-IP rate limit on POST /beta: ~10 requests per minute per source IP.
+            // Stops bot spam against the open signup form. SmartIpKeyExtractor honors
+            // X-Forwarded-For / Forwarded headers so this works behind reverse proxies.
+            let beta_governor = Arc::new(
+                GovernorConfigBuilder::default()
+                    .per_second(6)
+                    .burst_size(10)
+                    .use_headers()
+                    .finish()
+                    .expect("invalid /beta governor config"),
+            );
+
+            // Per-IP rate limit on /v1/* (the OpenAI-compatible inference API):
+            // ~60 requests per minute per source IP. Generous for legitimate usage,
+            // painful for a stolen-key flooder. Per-key rate-limiting is a Sprint 2 follow-up.
+            let v1_governor = Arc::new(
+                GovernorConfigBuilder::default()
+                    .per_second(1)
+                    .burst_size(60)
+                    .use_headers()
+                    .finish()
+                    .expect("invalid /v1 governor config"),
+            );
+
+            // Periodic cleanup so the in-memory IP map doesn't grow unbounded.
+            let beta_limiter = beta_governor.limiter().clone();
+            let v1_limiter = v1_governor.limiter().clone();
+            tokio::spawn(async move {
+                loop {
+                    tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+                    beta_limiter.retain_recent();
+                    v1_limiter.retain_recent();
+                }
+            });
+
+            let beta_rate_limited = Router::new()
+                .route("/beta", post(web::post_beta))
+                .layer(GovernorLayer::new(beta_governor));
+
             let app = Router::new()
-                // Authenticated routes
+                // Authenticated /v1/* routes (rate limit applied AFTER auth so the
+                // governor only counts authenticated requests; unauthenticated
+                // requests get rejected at auth and never reach the limiter).
                 .route("/v1/models", get(routes::models::list_models))
                 .route("/v1/embeddings", post(routes::embeddings::create_embeddings))
                 .route("/v1/chat/completions", post(routes::chat::create_chat_completion))
                 .route("/v1/stats", get(routes::stats::get_stats))
+                .route_layer(GovernorLayer::new(v1_governor))
                 .route_layer(middleware::from_fn_with_state(db, auth::require_api_key))
-                // Web UI
+                // Web UI (GET /beta is unauthenticated and unlimited)
                 .merge(web::router(&args.static_dir))
-                // Host discovery + updates
+                // POST /beta with the dedicated per-IP rate limiter
+                .merge(beta_rate_limited)
+                // Host discovery + updates (unauthenticated, no rate limit needed)
                 .route("/v1/node-info", get(routes::system::get_node_info))
                 .route("/v1/version", get(routes::system::get_version))
                 .route("/v1/update/{platform}", get(routes::system::get_update))
