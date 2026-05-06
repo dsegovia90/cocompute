@@ -84,20 +84,32 @@ pub const SESSION_COOKIE: &str = "__session";
 pub const SESSION_MAX_AGE_DAYS: i64 = 30;
 
 /// Create a signed session cookie for a user pid.
-pub fn make_session_cookie(pid: &str) -> Cookie<'static> {
+///
+/// `secure` controls the cookie's Secure flag. Pass `true` whenever the site is
+/// served over HTTPS — without it, the session cookie travels over plain HTTP
+/// and is sniffable. Callers typically derive this from `base_url.starts_with("https://")`.
+pub fn make_session_cookie(pid: &str, secure: bool) -> Cookie<'static> {
     Cookie::build((SESSION_COOKIE.to_string(), pid.to_string()))
         .path("/")
         .http_only(true)
+        .secure(secure)
         .same_site(axum_extra::extract::cookie::SameSite::Lax)
         .max_age(time::Duration::days(SESSION_MAX_AGE_DAYS))
         .build()
 }
 
+/// Convenience: returns true if `base_url` is an HTTPS URL.
+/// Used to decide whether the session cookie should set Secure.
+pub fn is_https_base_url(base_url: &str) -> bool {
+    base_url.starts_with("https://")
+}
+
 /// Create a cookie that clears the session.
-pub fn clear_session_cookie() -> Cookie<'static> {
+pub fn clear_session_cookie(secure: bool) -> Cookie<'static> {
     Cookie::build((SESSION_COOKIE.to_string(), String::new()))
         .path("/")
         .http_only(true)
+        .secure(secure)
         .max_age(time::Duration::ZERO)
         .build()
 }
