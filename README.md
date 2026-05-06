@@ -1,5 +1,9 @@
 # cocompute
 
+[![License: AGPLv3](https://img.shields.io/badge/License-AGPLv3-blue.svg)](./LICENSE)
+[![Status](https://img.shields.io/uptimerobot/status/m803005443-b162fae4bda6b2fff299e3a0?label=cocompute.ai)](https://stats.uptimerobot.com/hdrVVZOlHE)
+[![Uptime (7d)](https://img.shields.io/uptimerobot/ratio/7/m803005443-b162fae4bda6b2fff299e3a0)](https://stats.uptimerobot.com/hdrVVZOlHE)
+
 Open infrastructure for cooperative LLM inference on consumer hardware.
 
 cocompute lets you share an idle GPU sitting on your home network, and use other people's GPUs through an OpenAI-compatible API. Anything that runs Ollama works (NVIDIA, AMD, Apple Silicon, CPU). NAT traversal is handled by [iroh](https://www.iroh.computer/), so no port forwarding, no router config, no public IP required.
@@ -17,6 +21,8 @@ The protocol is open and AGPL-licensed. The same code that runs at [cocompute.ai
 ## Status
 
 Pre-launch alpha. Expect breaking changes between minor versions until 1.0. The protocol is stabilizing but not frozen.
+
+The badges at the top of this README show real-time status and uptime for cocompute.ai. They're hosted off-domain (shields.io + UptimeRobot) so they stay reachable when cocompute.ai itself is down. Full history at the [public status page](https://stats.uptimerobot.com/hdrVVZOlHE).
 
 ## Quick start
 

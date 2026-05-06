@@ -14,6 +14,14 @@ fn Landing(logged_in: bool) -> impl IntoView {
                 <nav class="flex items-center justify-between px-6 py-4">
                     <span class="text-white font-bold text-lg">"cocompute"</span>
                     <div class="flex items-center gap-5">
+                        // Plain link to the out-of-band UptimeRobot status page.
+                        // No "all systems operational" dot here on purpose: the
+                        // page rendering at all means the orchestrator is up, so
+                        // a green dot adds no information. The status page lives
+                        // off-domain so users can check it WHEN cocompute.ai is down.
+                        <a href="https://stats.uptimerobot.com/hdrVVZOlHE" target="_blank" rel="noopener" class="text-[#A1A1AA] text-sm font-medium hover:text-white transition">
+                            "Status"
+                        </a>
                         <a href="https://github.com/dsegovia90/cocompute" target="_blank" rel="noopener" class="text-[#A1A1AA] text-sm font-medium hover:text-white transition flex items-center gap-1.5">
                             <Icon name="github" class="w-4 h-4"/>
                             "GitHub"
