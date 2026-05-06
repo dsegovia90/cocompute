@@ -80,6 +80,7 @@ pub async fn post_verify(
         }
     }
 
-    let jar = jar.add(auth::make_session_cookie(&updated.pid));
+    let secure = auth::is_https_base_url(&state.base_url);
+    let jar = jar.add(auth::make_session_cookie(&updated.pid, secure));
     (jar, Redirect::to("/dashboard")).into_response()
 }
