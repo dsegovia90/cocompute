@@ -67,7 +67,10 @@ async fn open_signup_creates_user_and_beta_invite() {
 }
 
 #[tokio::test]
-async fn duplicate_signup_returns_already_signed_up_error() {
+async fn duplicate_signup_returns_generic_success_no_enumeration() {
+    // Email enumeration mitigation: existing-email signup MUST respond identically
+    // to new-email signup. If a client can distinguish "your email is taken" from
+    // "you signed up successfully," they can scrape which emails have accounts.
     let app = build_test_app().await;
 
     let body = "name=First&email=dupe@example.com&role=consumer";
@@ -80,7 +83,7 @@ async fn duplicate_signup_returns_already_signed_up_error() {
     let first_location = first.headers().get("location").unwrap().to_str().unwrap();
     assert!(first_location.contains("success=true"));
 
-    // Second signup with the same email should bounce with an "already signed up" error
+    // Second signup with the same email — must look identical to the client.
     let req = Request::post("/beta")
         .header("content-type", "application/x-www-form-urlencoded")
         .body(Body::from(
@@ -90,8 +93,21 @@ async fn duplicate_signup_returns_already_signed_up_error() {
     let second = app.call_raw(req).await;
     assert!(second.status().is_redirection());
     let second_location = second.headers().get("location").unwrap().to_str().unwrap();
-    assert!(
-        second_location.contains("error=") && second_location.contains("already+signed+up"),
-        "expected 'already signed up' error, got: {second_location}"
+    assert_eq!(
+        first_location, second_location,
+        "duplicate signup must redirect to same URL as fresh signup (enumeration prevention). \
+         first={first_location} second={second_location}"
     );
+
+    // The second submit should NOT have created a duplicate user or overwritten
+    // the first user's name. Verify the database stayed consistent.
+    use cocompute_orchestrator::db::entities::users;
+    use sea_orm::EntityTrait;
+    let count = users::Entity::find()
+        .filter(users::Column::Email.eq("dupe@example.com"))
+        .all(&app.db)
+        .await
+        .unwrap()
+        .len();
+    assert_eq!(count, 1, "duplicate signup must not create a second user row");
 }
