@@ -38,7 +38,9 @@ const RELEASES_REPO: &str = "dsegovia90/cocompute";
 /// GET /v1/update/:platform — Redirects to the GitHub Release artifact for the
 /// orchestrator's current version. The redirect target is:
 ///
-///     https://github.com/{RELEASES_REPO}/releases/download/v{VERSION}/cocompute-host-{platform}
+/// ```text
+/// https://github.com/{RELEASES_REPO}/releases/download/v{VERSION}/cocompute-host-{platform}
+/// ```
 ///
 /// Clients (install.sh, the host binary's self-update flow) must follow the
 /// redirect. install.sh uses `curl -sSfL` and update.rs uses reqwest's default
