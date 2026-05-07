@@ -3,6 +3,7 @@
 [![License: AGPLv3](https://img.shields.io/badge/License-AGPLv3-blue.svg)](./LICENSE)
 [![Status](https://img.shields.io/uptimerobot/status/m803005443-b162fae4bda6b2fff299e3a0?label=cocompute.ai)](https://stats.uptimerobot.com/hdrVVZOlHE)
 [![Uptime (7d)](https://img.shields.io/uptimerobot/ratio/7/m803005443-b162fae4bda6b2fff299e3a0)](https://stats.uptimerobot.com/hdrVVZOlHE)
+[![CLA assistant](https://cla-assistant.io/readme/badge/dsegovia90/cocompute)](https://cla-assistant.io/dsegovia90/cocompute) 
 
 Open infrastructure for cooperative LLM inference on consumer hardware.
 
