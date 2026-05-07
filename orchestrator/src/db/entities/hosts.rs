@@ -12,6 +12,7 @@ pub struct Model {
     pub last_seen: Option<DateTimeUtc>,
     pub user_id: Option<i32>,
     pub name: Option<String>,
+    pub is_active: bool,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

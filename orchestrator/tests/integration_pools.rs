@@ -157,3 +157,157 @@ async fn remove_host_from_pool_marks_membership_inactive() {
         .unwrap();
     assert!(!after.is_active, "membership should be is_active=false after remove");
 }
+
+#[tokio::test]
+async fn deactivate_host_marks_inactive_and_cascades_to_memberships() {
+    let app = build_test_app().await;
+    let user = create_verified_user(&app.db, "alice@example.com", "hunter2hunter2", "Alice").await;
+    let pool = create_pool(&app.db, user.id, "host-deactivate-pool").await;
+
+    let host_endpoint_id = "test-host-deactivate-xyz9876";
+    let host = hosts::ActiveModel {
+        endpoint_id: Set(host_endpoint_id.to_string()),
+        status: Set("connected".to_string()),
+        last_seen: Set(Some(chrono::Utc::now())),
+        user_id: Set(Some(user.id)),
+        ..Default::default()
+    };
+    let host = host.insert(&app.db).await.unwrap();
+
+    let membership = host_pool_memberships::ActiveModel {
+        host_endpoint_id: Set(host_endpoint_id.to_string()),
+        pool_id: Set(pool.id),
+        created_at: Set(chrono::Utc::now()),
+        ..Default::default()
+    };
+    membership.insert(&app.db).await.unwrap();
+
+    let cookie = login(&app, "alice@example.com", "hunter2hunter2").await;
+    let req = authed_post(&format!("/hosts/{}/deactivate", host_endpoint_id), &cookie, "");
+    let response = app.call_raw(req).await;
+
+    assert!(response.status().is_redirection(), "expected redirect, got {}", response.status());
+    let location = response.headers().get("location").unwrap().to_str().unwrap();
+    assert!(
+        location.contains("?saved=true") && !location.contains("error="),
+        "expected ?saved=true with no error, got: {location}"
+    );
+
+    let after_host = hosts::Entity::find_by_id(host.id).one(&app.db).await.unwrap().unwrap();
+    assert!(!after_host.is_active, "host should be is_active=false after deactivate");
+
+    let after_membership = host_pool_memberships::Entity::find()
+        .filter(host_pool_memberships::Column::PoolId.eq(pool.id))
+        .filter(host_pool_memberships::Column::HostEndpointId.eq(host_endpoint_id))
+        .one(&app.db)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(!after_membership.is_active, "membership should cascade to is_active=false");
+}
+
+#[tokio::test]
+async fn pool_owner_can_deactivate_member_api_key() {
+    let app = build_test_app().await;
+    let alice = create_verified_user(&app.db, "alice@example.com", "hunter2hunter2", "Alice").await;
+    let bob = create_verified_user(&app.db, "bob@example.com", "hunter2hunter2", "Bob").await;
+    let pool = create_pool(&app.db, alice.id, "shared-pool").await;
+
+    // Bob is a pool member
+    let member = pool_members::ActiveModel {
+        pool_id: Set(pool.id),
+        user_id: Set(bob.id),
+        role: Set("member".to_string()),
+        invited_at: Set(chrono::Utc::now()),
+        accepted_at: Set(Some(chrono::Utc::now())),
+        ..Default::default()
+    };
+    member.insert(&app.db).await.unwrap();
+
+    // Bob's key in the pool
+    let key = api_keys::ActiveModel {
+        key_hash: Set(cocompute_orchestrator::auth::hash_key("bobs-key")),
+        created_at: Set(chrono::Utc::now()),
+        user_id: Set(Some(bob.id)),
+        pool_id: Set(Some(pool.id)),
+        label: Set(Some("bobs key".to_string())),
+        ..Default::default()
+    };
+    let key = key.insert(&app.db).await.unwrap();
+
+    // Alice (pool owner) deactivates Bob's key
+    let cookie = login(&app, "alice@example.com", "hunter2hunter2").await;
+    let req = authed_post(&format!("/api-keys/{}/deactivate", key.id), &cookie, "");
+    let response = app.call_raw(req).await;
+
+    assert!(response.status().is_redirection());
+    let location = response.headers().get("location").unwrap().to_str().unwrap();
+    assert!(
+        location.contains("?saved=true") && !location.contains("error="),
+        "expected saved redirect, got: {location}"
+    );
+
+    let after = api_keys::Entity::find_by_id(key.id).one(&app.db).await.unwrap().unwrap();
+    assert!(!after.is_active, "pool owner should have deactivated member's key");
+}
+
+#[tokio::test]
+async fn non_owner_cannot_deactivate_others_api_key() {
+    let app = build_test_app().await;
+    let alice = create_verified_user(&app.db, "alice@example.com", "hunter2hunter2", "Alice").await;
+    let bob = create_verified_user(&app.db, "bob@example.com", "hunter2hunter2", "Bob").await;
+    let pool = create_pool(&app.db, alice.id, "alice-pool").await;
+
+    let member = pool_members::ActiveModel {
+        pool_id: Set(pool.id),
+        user_id: Set(bob.id),
+        role: Set("member".to_string()),
+        invited_at: Set(chrono::Utc::now()),
+        accepted_at: Set(Some(chrono::Utc::now())),
+        ..Default::default()
+    };
+    member.insert(&app.db).await.unwrap();
+
+    // Alice's key in her pool
+    let key = api_keys::ActiveModel {
+        key_hash: Set(cocompute_orchestrator::auth::hash_key("alices-key")),
+        created_at: Set(chrono::Utc::now()),
+        user_id: Set(Some(alice.id)),
+        pool_id: Set(Some(pool.id)),
+        label: Set(Some("alices key".to_string())),
+        ..Default::default()
+    };
+    let key = key.insert(&app.db).await.unwrap();
+
+    // Bob (member, not owner) tries to deactivate Alice's key
+    let cookie = login(&app, "bob@example.com", "hunter2hunter2").await;
+    let req = authed_post(&format!("/api-keys/{}/deactivate", key.id), &cookie, "");
+    let _response = app.call_raw(req).await;
+
+    let after = api_keys::Entity::find_by_id(key.id).one(&app.db).await.unwrap().unwrap();
+    assert!(after.is_active, "non-owner must NOT be able to deactivate someone else's key");
+}
+
+#[tokio::test]
+async fn deactivate_host_owned_by_other_user_is_rejected() {
+    let app = build_test_app().await;
+    let alice = create_verified_user(&app.db, "alice@example.com", "hunter2hunter2", "Alice").await;
+    let _bob = create_verified_user(&app.db, "bob@example.com", "hunter2hunter2", "Bob").await;
+
+    let host_endpoint_id = "alices-host-endpoint-id-99887";
+    let host = hosts::ActiveModel {
+        endpoint_id: Set(host_endpoint_id.to_string()),
+        status: Set("connected".to_string()),
+        last_seen: Set(Some(chrono::Utc::now())),
+        user_id: Set(Some(alice.id)),
+        ..Default::default()
+    };
+    let host = host.insert(&app.db).await.unwrap();
+
+    let cookie = login(&app, "bob@example.com", "hunter2hunter2").await;
+    let req = authed_post(&format!("/hosts/{}/deactivate", host_endpoint_id), &cookie, "");
+    let _response = app.call_raw(req).await;
+
+    let after = hosts::Entity::find_by_id(host.id).one(&app.db).await.unwrap().unwrap();
+    assert!(after.is_active, "alice's host must NOT be deactivated by bob");
+}

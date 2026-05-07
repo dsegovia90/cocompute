@@ -33,6 +33,7 @@ pub fn router(static_dir: &str) -> Router<crate::AppState> {
         .route("/pools/{pool_pid}/reactivate", post(handlers::reactivate_pool))
         .route("/pools/{pool_pid}/remove-host/{host_id}", post(handlers::remove_host_from_pool))
         .route("/hosts/{endpoint_id}/rename", post(handlers::rename_host))
+        .route("/hosts/{endpoint_id}/deactivate", post(handlers::deactivate_host))
         .route("/api-keys/{key_id}/deactivate", post(handlers::deactivate_api_key))
         .route("/api-keys/{key_id}/rename", post(handlers::rename_api_key))
         .route("/api-keys/global", post(handlers::create_global_api_key))

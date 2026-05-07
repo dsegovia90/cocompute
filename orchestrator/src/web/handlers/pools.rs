@@ -253,6 +253,7 @@ pub async fn add_host_to_pool(
     // Verify host ownership
     let host = hosts::Entity::find()
         .filter(hosts::Column::EndpointId.eq(&form.host_id))
+        .filter(hosts::Column::IsActive.eq(true))
         .one(&state.db)
         .await;
 
@@ -360,7 +361,8 @@ pub async fn reactivate_pool(
     Redirect::to("/dashboard?saved=true").into_response()
 }
 
-/// Deactivate an API key (soft delete). Requires key ownership.
+/// Deactivate an API key (soft delete). Allowed for the key creator OR the
+/// owner of the pool the key belongs to.
 pub async fn deactivate_api_key(
     State(state): State<AppState>,
     CurrentUser(user): CurrentUser,
@@ -372,9 +374,26 @@ pub async fn deactivate_api_key(
         .await;
 
     let key = match key {
-        Ok(Some(k)) if k.user_id == Some(user.id) => k,
+        Ok(Some(k)) => k,
         _ => return Redirect::to("/dashboard").into_response(),
     };
+
+    let is_key_owner = key.user_id == Some(user.id);
+    let is_pool_owner = match key.pool_id {
+        Some(pool_id) => pools::Entity::find_by_id(pool_id)
+            .filter(pools::Column::IsActive.eq(true))
+            .one(&state.db)
+            .await
+            .ok()
+            .flatten()
+            .map(|p| p.owner_id == user.id)
+            .unwrap_or(false),
+        None => false,
+    };
+
+    if !is_key_owner && !is_pool_owner {
+        return Redirect::to("/dashboard").into_response();
+    }
 
     let mut active: api_keys::ActiveModel = key.into();
     active.is_active = Set(false);
@@ -410,6 +429,7 @@ pub async fn remove_host_from_pool(
     let is_pool_owner = pool.owner_id == user.id;
     let host = hosts::Entity::find()
         .filter(hosts::Column::EndpointId.eq(&host_endpoint_id))
+        .filter(hosts::Column::IsActive.eq(true))
         .one(&state.db)
         .await;
     let is_host_owner = matches!(&host, Ok(Some(h)) if h.user_id == Some(user.id));

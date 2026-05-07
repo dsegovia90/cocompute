@@ -99,6 +99,11 @@ fn Dashboard(
                                                 </div>
                                                 <div class="flex items-center gap-3 shrink-0">
                                                     <span class="text-[#52525B] text-xs">{pools_text}</span>
+                                                    <form method="POST" action={format!("/hosts/{}/deactivate", host_id)}>
+                                                        <button type="submit" class="text-[#3F3F46] text-xs hover:text-red-400 transition cursor-pointer" onclick="return confirm('Remove this host? It will stop appearing in your dashboard. To re-register, run install.sh again on the machine.')">
+                                                            "Remove"
+                                                        </button>
+                                                    </form>
                                                 </div>
                                             </div>
                                         }
@@ -301,11 +306,18 @@ fn Dashboard(
                                                                     </form>
                                                                     <span class="text-[#52525B] text-xs font-mono shrink-0">{key_display}</span>
                                                                 </div>
-                                                                <form method="POST" action={format!("/api-keys/{}/deactivate", key.id)}>
-                                                                    <button type="submit" class="text-[#52525B] text-xs hover:text-red-400 transition cursor-pointer" onclick="return confirm('Deactivate this API key?')">
-                                                                        "revoke"
-                                                                    </button>
-                                                                </form>
+                                                                {if key.can_revoke {
+                                                                    let revoke_action = format!("/api-keys/{}/deactivate", key.id);
+                                                                    view! {
+                                                                        <form method="POST" action={revoke_action}>
+                                                                            <button type="submit" class="text-[#52525B] text-xs hover:text-red-400 transition cursor-pointer" onclick="return confirm('Deactivate this API key?')">
+                                                                                "revoke"
+                                                                            </button>
+                                                                        </form>
+                                                                    }.into_any()
+                                                                } else {
+                                                                    view! { <span></span> }.into_any()
+                                                                }}
                                                             </div>
                                                         }}).collect::<Vec<_>>()}
                                                     </div>
@@ -367,6 +379,7 @@ struct ApiKeyView {
     hash_prefix: String,
     hash_suffix: String,
     label: Option<String>,
+    can_revoke: bool,
 }
 
 /// GET /dashboard — authenticated dashboard showing user's pools, hosts, and keys.
@@ -381,6 +394,7 @@ pub async fn dashboard(
     // Get all hosts owned by this user
     let owned_host_records = hosts::Entity::find()
         .filter(hosts::Column::UserId.eq(Some(user.id)))
+        .filter(hosts::Column::IsActive.eq(true))
         .all(&state.db)
         .await
         .unwrap_or_default();
@@ -405,6 +419,7 @@ pub async fn dashboard(
         .collect();
 
     let all_hosts = hosts::Entity::find()
+        .filter(hosts::Column::IsActive.eq(true))
         .all(&state.db)
         .await
         .unwrap_or_default();
@@ -503,6 +518,7 @@ pub async fn dashboard(
             .await
             .unwrap_or_default();
 
+        let is_pool_owner = pool.owner_id == user.id;
         let api_key_views: Vec<ApiKeyView> = keys
             .iter()
             .map(|k| {
@@ -512,6 +528,7 @@ pub async fn dashboard(
                     hash_prefix: hash.chars().take(8).collect(),
                     hash_suffix: hash.chars().rev().take(4).collect::<String>().chars().rev().collect(),
                     label: k.label.clone(),
+                    can_revoke: is_pool_owner || k.user_id == Some(user.id),
                 }
             })
             .collect();

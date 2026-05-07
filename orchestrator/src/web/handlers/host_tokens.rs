@@ -9,7 +9,7 @@ use serde::Deserialize;
 
 use crate::{
     auth::{self, CurrentUser},
-    db::entities::hosts,
+    db::entities::{host_pool_memberships, hosts},
     web::components::*,
     AppState,
 };
@@ -140,6 +140,7 @@ pub async fn rename_host(
 ) -> Response {
     let host = hosts::Entity::find()
         .filter(hosts::Column::EndpointId.eq(&endpoint_id))
+        .filter(hosts::Column::IsActive.eq(true))
         .one(&state.db)
         .await;
 
@@ -154,6 +155,53 @@ pub async fn rename_host(
     let mut active: hosts::ActiveModel = host.into();
     active.name = Set(name);
     let _ = active.update(&state.db).await;
+
+    Redirect::to("/dashboard?saved=true").into_response()
+}
+
+/// Deregister a host (soft delete). Cascade soft-deletes the host's pool
+/// memberships and evicts the host from the in-memory HostManager so /v1/*
+/// stops routing requests to it. Owner re-installs to register fresh.
+pub async fn deactivate_host(
+    State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
+    axum::extract::Path(endpoint_id): axum::extract::Path<String>,
+) -> Response {
+    let host = hosts::Entity::find()
+        .filter(hosts::Column::EndpointId.eq(&endpoint_id))
+        .filter(hosts::Column::IsActive.eq(true))
+        .one(&state.db)
+        .await;
+
+    let host = match host {
+        Ok(Some(h)) if h.user_id == Some(user.id) => h,
+        _ => return Redirect::to("/dashboard").into_response(),
+    };
+
+    // Cascade: soft-delete every active pool membership for this host.
+    let memberships = host_pool_memberships::Entity::find()
+        .filter(host_pool_memberships::Column::HostEndpointId.eq(&endpoint_id))
+        .filter(host_pool_memberships::Column::IsActive.eq(true))
+        .all(&state.db)
+        .await
+        .unwrap_or_default();
+    for m in memberships {
+        let mut active: host_pool_memberships::ActiveModel = m.into();
+        active.is_active = Set(false);
+        if let Err(e) = active.update(&state.db).await {
+            tracing::error!("failed to deactivate host membership: {e}");
+        }
+    }
+
+    let mut active: hosts::ActiveModel = host.into();
+    active.is_active = Set(false);
+    if let Err(e) = active.update(&state.db).await {
+        tracing::error!("failed to deactivate host: {e}");
+        return Redirect::to("/dashboard?error=update_failed").into_response();
+    }
+
+    // Boot from in-memory HostManager so /v1/* stops routing immediately.
+    state.hosts.unregister(&endpoint_id).await;
 
     Redirect::to("/dashboard?saved=true").into_response()
 }

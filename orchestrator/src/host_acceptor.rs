@@ -163,6 +163,25 @@ impl iroh::protocol::ProtocolHandler for HostAcceptor {
                 }
             };
 
+            // Reject deregistered hosts. is_active=false means an owner removed
+            // this host via the dashboard; they must reinstall to register fresh.
+            let existing_host = hosts::Entity::find()
+                .filter(hosts::Column::EndpointId.eq(&host_id))
+                .one(&acceptor.db)
+                .await
+                .ok()
+                .flatten();
+
+            if let Some(ref h) = existing_host {
+                if !h.is_active {
+                    tracing::warn!("rejecting connection from deregistered host {host_id}");
+                    return Err(std::io::Error::other(
+                        "host is deregistered; reinstall to register a new host",
+                    )
+                    .into());
+                }
+            }
+
             // Determine user ownership and pool memberships
             let user_id = if let Some(token) = setup_token {
                 // New host with setup token — establishes user ownership
@@ -174,14 +193,8 @@ impl iroh::protocol::ProtocolHandler for HostAcceptor {
                     }
                 }
             } else {
-                // Reconnecting host — look up existing user ownership from DB
-                hosts::Entity::find()
-                    .filter(hosts::Column::EndpointId.eq(&host_id))
-                    .one(&acceptor.db)
-                    .await
-                    .ok()
-                    .flatten()
-                    .and_then(|h| h.user_id)
+                // Reconnecting host — reuse the lookup above
+                existing_host.and_then(|h| h.user_id)
             };
 
             // Restore pool memberships from DB (works for both new and reconnecting hosts)
