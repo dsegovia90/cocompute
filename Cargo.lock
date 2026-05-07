@@ -756,7 +756,7 @@ dependencies = [
 
 [[package]]
 name = "cocompute_host"
-version = "0.7.0"
+version = "0.7.1"
 dependencies = [
  "anyhow",
  "clap",
@@ -781,7 +781,7 @@ dependencies = [
 
 [[package]]
 name = "cocompute_orchestrator"
-version = "0.7.0"
+version = "0.7.1"
 dependencies = [
  "anyhow",
  "argon2",
@@ -855,7 +855,7 @@ dependencies = [
 
 [[package]]
 name = "common"
-version = "0.7.0"
+version = "0.7.1"
 dependencies = [
  "anyhow",
  "bitcode",
