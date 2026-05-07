@@ -13,7 +13,7 @@ The protocol is open and AGPL-licensed. The same code that runs at [cocompute.ai
 ```
 ┌──────────────┐                ┌────────────────────┐                ┌──────────────┐
 │ host         │  iroh / QUIC   │ orchestrator       │  HTTP / JSON   │ consumer     │
-│ (your GPU)   │ ◄──────────────►│ (cocompute.ai      │ ◄──────────────►│ (curl, SDK,  │
+│ (your GPU)   │◄──────────────►│ (cocompute.ai      │◄──────────────►│ (curl, SDK,  │
 │ runs Ollama  │                │  or self-hosted)   │                │  openwebui)  │
 └──────────────┘                └────────────────────┘                └──────────────┘
 ```
