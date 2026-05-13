@@ -13,3 +13,6 @@ serve:
 # Development: bacon rebuilds CSS + restarts server on every change
 dev:
     COCOMPUTE_SESSION_SECRET=dev-local-session-key-do-not-use-in-production-must-be-sixty-four-bytes bacon dev
+
+# Optional local-only recipes (server IPs, personal shortcuts). Gitignored.
+import? 'justfile.local'
