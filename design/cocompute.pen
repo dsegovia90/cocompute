@@ -1,5 +1,5 @@
 {
-  "version": "2.10",
+  "version": "2.11",
   "children": [
     {
       "type": "frame",
@@ -3377,7 +3377,8 @@
               "lineHeight": 1.6,
               "textAlign": "center",
               "fontFamily": "Inter",
-              "fontSize": 16
+              "fontSize": 16,
+              "fontWeight": "normal"
             },
             {
               "type": "frame",
@@ -4597,6 +4598,305 @@
               ]
             }
           ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "epiDU",
+      "x": 200,
+      "y": 4477,
+      "name": "og_A_bottomLeft",
+      "width": 1200,
+      "height": 630,
+      "fill": "#0A0A0F",
+      "layout": "none",
+      "children": [
+        {
+          "type": "ellipse",
+          "id": "R0NSH",
+          "x": 80,
+          "y": 556,
+          "name": "vaDot",
+          "enabled": false,
+          "fill": "#A855F7",
+          "width": 8,
+          "height": 8
+        },
+        {
+          "type": "script",
+          "id": "d5gLZT",
+          "x": 0,
+          "y": 0,
+          "name": "vaScript",
+          "width": 1200,
+          "height": 520,
+          "scriptUri": "flow_diagram.js"
+        },
+        {
+          "type": "rectangle",
+          "id": "hytv9",
+          "x": 0,
+          "y": 480,
+          "name": "vaScrim",
+          "fill": {
+            "type": "gradient",
+            "gradientType": "linear",
+            "enabled": true,
+            "rotation": 0,
+            "size": {
+              "height": 1
+            },
+            "colors": [
+              {
+                "color": "#0A0A0F00",
+                "position": 0
+              },
+              {
+                "color": "#0A0A0F",
+                "position": 1
+              }
+            ]
+          },
+          "width": 1200,
+          "height": 150
+        },
+        {
+          "type": "text",
+          "id": "K7uQO",
+          "x": 80,
+          "y": 540,
+          "name": "vaWord",
+          "fill": "#FFFFFF",
+          "content": "cocompute",
+          "fontFamily": "Inter",
+          "fontSize": 36,
+          "fontWeight": "700"
+        },
+        {
+          "type": "text",
+          "id": "vQ68K",
+          "x": 80,
+          "y": 586,
+          "name": "vaTag",
+          "fill": "#A1A1AA",
+          "content": "your GPU, your inference — no cloud needed",
+          "fontFamily": "Inter",
+          "fontSize": 16,
+          "fontWeight": "normal"
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "UaGmR",
+      "x": 1500,
+      "y": 4477,
+      "name": "og_B_centeredTop",
+      "width": 1200,
+      "height": 630,
+      "fill": "#0A0A0F",
+      "layout": "none",
+      "children": [
+        {
+          "type": "script",
+          "id": "hoKr5",
+          "x": 0,
+          "y": 130,
+          "name": "vbScript",
+          "width": 1200,
+          "height": 500,
+          "scriptUri": "flow_diagram.js"
+        },
+        {
+          "type": "frame",
+          "id": "wQQr9",
+          "x": 0,
+          "y": 30,
+          "name": "vbHeader",
+          "width": 1200,
+          "height": 90,
+          "layout": "vertical",
+          "gap": 8,
+          "justifyContent": "center",
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "text",
+              "id": "gFZYC",
+              "name": "vbWord",
+              "fill": "#FFFFFF",
+              "content": "cocompute",
+              "fontFamily": "Inter",
+              "fontSize": 38,
+              "fontWeight": "700"
+            },
+            {
+              "type": "text",
+              "id": "fL9iy",
+              "name": "vbTag",
+              "fill": "#A1A1AA",
+              "content": "your GPU, your inference — no cloud needed",
+              "fontFamily": "Inter",
+              "fontSize": 16,
+              "fontWeight": "normal"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "V8Br38",
+      "x": 200,
+      "y": 5200,
+      "name": "og_C_cornerBadge",
+      "width": 1200,
+      "height": 630,
+      "fill": "#0A0A0F",
+      "layout": "none",
+      "children": [
+        {
+          "type": "script",
+          "id": "Thfxn",
+          "x": 0,
+          "y": 0,
+          "name": "vcScript",
+          "width": 1200,
+          "height": 630,
+          "scriptUri": "flow_diagram.js"
+        },
+        {
+          "type": "frame",
+          "id": "S8iS1L",
+          "x": 48,
+          "y": 36,
+          "name": "vcBadge",
+          "gap": 10,
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "ellipse",
+              "id": "DFNzX",
+              "name": "vcDot",
+              "fill": "#A855F7",
+              "width": 10,
+              "height": 10,
+              "effect": {
+                "type": "shadow",
+                "shadowType": "outer",
+                "color": "#A855F7",
+                "blur": 12,
+                "spread": 1
+              }
+            },
+            {
+              "type": "text",
+              "id": "pEodK",
+              "name": "vcWord",
+              "fill": "#FFFFFF",
+              "content": "cocompute",
+              "fontFamily": "Inter",
+              "fontSize": 22,
+              "fontWeight": "700"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "P00Jf",
+      "x": 1500,
+      "y": 5200,
+      "name": "og_D_centerOverlay",
+      "width": 1200,
+      "height": 630,
+      "fill": "#0A0A0F",
+      "layout": "none",
+      "children": [
+        {
+          "type": "script",
+          "id": "D8ApK",
+          "x": 0,
+          "y": 0,
+          "name": "vdScript",
+          "opacity": 0.32,
+          "width": 1200,
+          "height": 630,
+          "scriptUri": "flow_diagram.js"
+        },
+        {
+          "type": "rectangle",
+          "id": "A0OrgA",
+          "x": 0,
+          "y": 180,
+          "name": "vdScrim",
+          "fill": "#0A0A0FCC",
+          "width": 1200,
+          "height": 270
+        },
+        {
+          "type": "frame",
+          "id": "C03gZ",
+          "x": 0,
+          "y": 200,
+          "name": "vdHeadlineWrap",
+          "width": 1200,
+          "height": 230,
+          "layout": "vertical",
+          "gap": 14,
+          "justifyContent": "center",
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "text",
+              "id": "vbLGY",
+              "name": "vdHead",
+              "fill": "#FFFFFF",
+              "textGrowth": "fixed-width",
+              "width": 1100,
+              "content": "your GPU.\nyour inference.",
+              "lineHeight": 1.05,
+              "textAlign": "center",
+              "fontFamily": "Inter",
+              "fontSize": 64,
+              "fontWeight": "700"
+            },
+            {
+              "type": "text",
+              "id": "fn9lW",
+              "name": "vdSub",
+              "fill": "#A855F7",
+              "content": "cocompute — no cloud needed",
+              "fontFamily": "Inter",
+              "fontSize": 18,
+              "fontWeight": "normal"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "Jxk9O",
+      "x": 3000,
+      "y": 4477,
+      "name": "flowDiagramStatic",
+      "width": 1200,
+      "height": 630,
+      "fill": "#0A0A0F",
+      "layout": "none",
+      "children": [
+        {
+          "type": "script",
+          "id": "ADfr7",
+          "x": 0,
+          "y": 0,
+          "name": "script",
+          "width": 1200,
+          "height": 630,
+          "scriptUri": "flow_diagram.js"
         }
       ]
     }
