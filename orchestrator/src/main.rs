@@ -270,6 +270,7 @@ async fn main() -> anyhow::Result<()> {
                     .timeout(std::time::Duration::from_secs(10))
                     .build()
                     .expect("failed to build reqwest client"),
+                total_compute_cache: cocompute_orchestrator::web::TotalComputeCache::new(),
             };
 
             let app = build_router(state, &args.static_dir, true);

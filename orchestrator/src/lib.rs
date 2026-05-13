@@ -38,6 +38,9 @@ pub struct AppState {
     pub turnstile_secret_key: Option<String>,
     /// Shared HTTP client for outbound calls (Turnstile siteverify, etc.).
     pub http: reqwest::Client,
+    /// Cached total compute time (sum of compute_ms across metering_logs).
+    /// Refreshed lazily on the landing page with a coarse TTL.
+    pub total_compute_cache: web::TotalComputeCache,
 }
 
 impl axum::extract::FromRef<AppState> for axum_extra::extract::cookie::Key {

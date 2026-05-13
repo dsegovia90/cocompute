@@ -70,6 +70,7 @@ pub async fn build_test_app() -> TestApp {
         turnstile_site_key: None,
         turnstile_secret_key: None,
         http: reqwest::Client::new(),
+        total_compute_cache: cocompute_orchestrator::web::TotalComputeCache::new(),
     };
 
     // build_router(_, _, false) skips the governor layers — tests don't need them

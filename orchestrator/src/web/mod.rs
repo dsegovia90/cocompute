@@ -2,6 +2,9 @@ pub mod asset_hash;
 mod components;
 mod handlers;
 mod pages;
+pub mod total_compute;
+
+pub use total_compute::TotalComputeCache;
 
 use axum::{Router, response::Html, routing::{get, post}};
 use leptos::prelude::*;

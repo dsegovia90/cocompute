@@ -1,11 +1,11 @@
-use axum::response::Html;
+use axum::{extract::State, response::Html};
 use axum_extra::extract::cookie::SignedCookieJar;
 use leptos::prelude::*;
 
 use crate::web::components::*;
 
 #[component]
-fn Landing(logged_in: bool) -> impl IntoView {
+fn Landing(logged_in: bool, total_compute: String) -> impl IntoView {
     view! {
         <Base title="cocompute">
             <PageShell>
@@ -64,6 +64,11 @@ fn Landing(logged_in: bool) -> impl IntoView {
                             <Icon name="github" class="w-[18px] h-[18px]"/>
                             "View on GitHub"
                         </a>
+                    </div>
+
+                    <div class="mt-8 inline-flex items-center gap-2 rounded-full bg-[#16161E] border border-[#27272A] px-4 py-2">
+                        <span class="text-[#A1A1AA] text-xs font-medium">"Total time computed"</span>
+                        <span class="text-white text-xs font-semibold tabular-nums">{total_compute}</span>
                     </div>
 
                     // ── Network animation ──
@@ -219,7 +224,12 @@ fn Landing(logged_in: bool) -> impl IntoView {
     }
 }
 
-pub async fn landing(jar: SignedCookieJar) -> Html<String> {
+pub async fn landing(
+    State(state): State<crate::AppState>,
+    jar: SignedCookieJar,
+) -> Html<String> {
     let logged_in = jar.get(crate::auth::SESSION_COOKIE).is_some();
-    crate::web::render(Landing(LandingProps { logged_in }))
+    let total_ms = state.total_compute_cache.get(&state.db).await;
+    let total_compute = crate::web::total_compute::humanize_ms(total_ms);
+    crate::web::render(Landing(LandingProps { logged_in, total_compute }))
 }
