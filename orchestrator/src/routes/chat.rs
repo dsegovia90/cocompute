@@ -1,5 +1,5 @@
 use axum::{Extension, Json, extract::State, response::IntoResponse};
-use axum::response::sse::{Event, Sse};
+use axum::response::sse::{Event, KeepAlive, Sse};
 use common::{
     helpers::{read_frame, write_p2p},
     protocols::{ChatStreamFrame, Request, Response},
@@ -311,5 +311,7 @@ pub(crate) async fn create_chat_completion_stream(
         }
     };
 
-    Ok(Sse::new(stream).into_response())
+    Ok(Sse::new(stream)
+        .keep_alive(KeepAlive::new().interval(std::time::Duration::from_secs(15)))
+        .into_response())
 }
