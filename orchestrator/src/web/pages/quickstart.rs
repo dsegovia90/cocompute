@@ -53,7 +53,7 @@ fn Quickstart(base_url: String) -> impl IntoView {
         r#"curl {base_url}/v1/chat/completions \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{{"model":"gemma4","messages":[{{"role":"user","content":"hello"}}]}}'"#
+  -d '{{"model":"gemma4:31b","messages":[{{"role":"user","content":"hello"}}]}}'"#
     );
     let list_models_cmd = format!(
         r#"curl {base_url}/v1/models -H "Authorization: Bearer YOUR_API_KEY""#
