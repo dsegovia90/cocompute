@@ -2,7 +2,7 @@ use axum::{Extension, Json, extract::State};
 
 use crate::{AppState, auth::PoolContext, error::AppError};
 
-/// GET /v1/models — OpenAI-compatible model listing, scoped to the API key's pool.
+/// GET /v1/models, OpenAI-compatible model listing, scoped to the API key's pool.
 pub(crate) async fn list_models(
     State(state): State<AppState>,
     Extension(pool_ctx): Extension<PoolContext>,

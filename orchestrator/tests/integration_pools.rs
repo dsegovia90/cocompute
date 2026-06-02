@@ -1,7 +1,7 @@
 //! Regression tests for the pools.rs handlers that previously swallowed DB errors.
 //! Each test exercises the happy path end-to-end. If anyone re-introduces the old
 //! `let _ = active.update(...).await` pattern, the redirect target changes from
-//! ?saved=true to ?error=update_failed under failure conditions — but more
+//! ?saved=true to ?error=update_failed under failure conditions, but more
 //! importantly, these tests fail loudly if the basic flow breaks at all.
 
 mod common;

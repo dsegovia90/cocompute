@@ -12,7 +12,7 @@ pub struct ResetQuery {
 #[component]
 fn ResetPage(token: String, error: Option<String>) -> impl IntoView {
     view! {
-        <Base title="cocompute — reset password">
+        <Base title="cocompute · reset password">
             <PageShell>
                 <div class="flex items-center justify-center min-h-screen">
                     <form method="POST" action="/reset" class="w-[400px] rounded-xl bg-[#16161E] border border-[#27272A] px-10 pt-12 pb-10 flex flex-col gap-7">
@@ -44,7 +44,7 @@ fn ResetPage(token: String, error: Option<String>) -> impl IntoView {
 #[component]
 fn ResetExpired() -> impl IntoView {
     view! {
-        <Base title="cocompute — link expired">
+        <Base title="cocompute · link expired">
             <PageShell>
                 <div class="flex items-center justify-center min-h-screen">
                     <div class="w-[400px] rounded-xl bg-[#16161E] border border-[#27272A] px-10 pt-12 pb-10 flex flex-col gap-5 items-center text-center">

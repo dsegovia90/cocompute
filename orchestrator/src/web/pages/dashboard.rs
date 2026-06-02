@@ -21,7 +21,7 @@ fn Dashboard(
     saved: bool,
 ) -> impl IntoView {
     view! {
-        <Base title="cocompute — dashboard">
+        <Base title="cocompute · dashboard">
             <PageShell>
                 <div class="max-w-5xl mx-auto px-6 py-10">
                     // Toast notification
@@ -382,7 +382,7 @@ struct ApiKeyView {
     can_revoke: bool,
 }
 
-/// GET /dashboard — authenticated dashboard showing user's pools, hosts, and keys.
+/// GET /dashboard, authenticated dashboard showing user's pools, hosts, and keys.
 pub async fn dashboard(
     State(state): State<crate::AppState>,
     CurrentUser(user): CurrentUser,

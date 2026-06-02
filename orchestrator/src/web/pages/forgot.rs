@@ -11,7 +11,7 @@ pub struct ForgotQuery {
 #[component]
 fn ForgotPage(sent: bool) -> impl IntoView {
     view! {
-        <Base title="cocompute — forgot password">
+        <Base title="cocompute · forgot password">
             <PageShell>
                 <div class="flex items-center justify-center min-h-screen">
                     <form method="POST" action="/forgot" class="w-[400px] rounded-xl bg-[#16161E] border border-[#27272A] px-10 pt-12 pb-10 flex flex-col gap-7">

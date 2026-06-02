@@ -22,7 +22,7 @@ pub struct CreateApiKeyForm {
 #[component]
 fn ApiKeyCreatedPage(key: String, pool_name: String, label: String) -> impl IntoView {
     view! {
-        <Base title="cocompute — API key created">
+        <Base title="cocompute · API key created">
             <PageShell>
                 <div class="max-w-2xl mx-auto px-6 py-10">
                     <div class="rounded-xl bg-[#16161E] border border-[#27272A] p-8 flex flex-col gap-6">

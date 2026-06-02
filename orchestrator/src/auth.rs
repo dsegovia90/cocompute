@@ -90,7 +90,7 @@ fn cookies_should_be_secure(state: &crate::AppState) -> bool {
 }
 
 /// Create a signed session cookie for a user pid. Sets Secure automatically
-/// based on whether `state.base_url` is HTTPS — single source of truth, callers
+/// based on whether `state.base_url` is HTTPS, single source of truth, callers
 /// never have to remember the flag.
 pub fn make_session_cookie(state: &crate::AppState, pid: &str) -> Cookie<'static> {
     Cookie::build((SESSION_COOKIE.to_string(), pid.to_string()))

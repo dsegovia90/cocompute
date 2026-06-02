@@ -17,7 +17,7 @@ use crate::{
     proxy::{connection_rtt_ms, log_metering, route_to_host},
 };
 
-/// POST /v1/chat/completions — OpenAI-compatible chat endpoint.
+/// POST /v1/chat/completions, OpenAI-compatible chat endpoint.
 /// Supports both streaming (SSE) and non-streaming responses.
 pub(crate) async fn create_chat_completion(
     State(state): State<AppState>,
@@ -226,7 +226,7 @@ pub(crate) async fn create_chat_completion_stream(
                     }).unwrap()));
                 }
                 Ok(Some(ChatStreamFrame::Thinking(thinking))) => {
-                    // Forward thinking as content — most clients display it inline
+                    // Forward thinking as content, most clients display it inline
                     yield Ok(Event::default().data(serde_json::to_string(&OpenAIChatStreamChunk {
                         id: chat_id.clone(),
                         object: "chat.completion.chunk",

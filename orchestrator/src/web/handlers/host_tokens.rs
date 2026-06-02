@@ -23,7 +23,7 @@ fn HostTokenPage(token: String, endpoint_id: String, base_url: String, is_dev: b
         "cargo run -p cocompute_host -- --orchestrator-url {base_url} --setup-token {token}"
     );
     view! {
-        <Base title="cocompute — host setup">
+        <Base title="cocompute · host setup">
             <PageShell>
                 <div class="max-w-2xl mx-auto px-6 py-10">
                     <div class="rounded-xl bg-[#16161E] border border-[#27272A] p-8 flex flex-col gap-6">

@@ -2,8 +2,8 @@ use axum::{Json, extract::State};
 
 use crate::{AppState, error::AppError};
 
-/// GET /v1/node-info — Returns the orchestrator's current iroh endpoint ID.
-/// Unauthenticated — used by hosts to discover/refresh the orchestrator ID.
+/// GET /v1/node-info, Returns the orchestrator's current iroh endpoint ID.
+/// Unauthenticated, used by hosts to discover/refresh the orchestrator ID.
 pub(crate) async fn get_node_info(
     State(state): State<AppState>,
 ) -> Json<serde_json::Value> {
@@ -13,7 +13,7 @@ pub(crate) async fn get_node_info(
     }))
 }
 
-/// GET /v1/version — Returns the orchestrator version for update checks.
+/// GET /v1/version, Returns the orchestrator version for update checks.
 pub(crate) async fn get_version() -> Json<serde_json::Value> {
     Json(serde_json::json!({
         "version": env!("CARGO_PKG_VERSION"),
@@ -35,7 +35,7 @@ const SUPPORTED_PLATFORMS: &[&str] = &[
 /// without consuming orchestrator bandwidth.
 const RELEASES_REPO: &str = "dsegovia90/cocompute";
 
-/// GET /v1/update/:platform — Redirects to the GitHub Release artifact for the
+/// GET /v1/update/:platform, Redirects to the GitHub Release artifact for the
 /// orchestrator's current version. The redirect target is:
 ///
 /// ```text
@@ -46,7 +46,7 @@ const RELEASES_REPO: &str = "dsegovia90/cocompute";
 /// redirect. install.sh uses `curl -sSfL` and update.rs uses reqwest's default
 /// redirect-following behavior.
 ///
-/// Sister artifact: cocompute-host-{platform}.minisig — the minisign signature
+/// Sister artifact: cocompute-host-{platform}.minisig, the minisign signature
 /// for the binary. install.sh fetches both and verifies the signature before
 /// chmod +x.
 ///
@@ -74,7 +74,7 @@ pub(crate) async fn get_update(
         .unwrap())
 }
 
-/// GET /v1/update/:platform.minisig — Redirects to the minisign signature
+/// GET /v1/update/:platform.minisig, Redirects to the minisign signature
 /// artifact for the host binary at the orchestrator's current version. install.sh
 /// fetches this immediately after the binary and verifies before chmod +x.
 pub(crate) async fn get_update_signature(
