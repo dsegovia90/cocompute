@@ -4,7 +4,7 @@ use serde::Deserialize;
 use crate::web::components::*;
 
 #[derive(Deserialize)]
-pub struct BetaQuery {
+pub struct SignupQuery {
     pub error: Option<String>,
     pub success: Option<bool>,
 }
@@ -34,7 +34,7 @@ fn RoleOption(
 }
 
 #[component]
-fn BetaInvite(error: Option<String>, turnstile_site_key: Option<String>) -> impl IntoView {
+fn SignupPage(error: Option<String>, turnstile_site_key: Option<String>) -> impl IntoView {
     let captcha_widget = turnstile_site_key.clone().map(|key| view! {
         <>
             <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
@@ -43,16 +43,16 @@ fn BetaInvite(error: Option<String>, turnstile_site_key: Option<String>) -> impl
     });
 
     view! {
-        <Base title="cocompute — sign up">
+        <Base title="cocompute · sign up">
             <PageShell>
                 <div class="flex items-center justify-center min-h-screen py-12">
-                    <form method="POST" action="/beta" class="w-[480px] rounded-xl bg-[#16161E] border border-[#27272A] px-9 py-10 flex flex-col gap-6">
+                    <form method="POST" action="/signup" class="w-[480px] rounded-xl bg-[#16161E] border border-[#27272A] px-9 py-10 flex flex-col gap-6">
 
                         // Header
                         <div class="flex flex-col gap-2">
                             <h1 class="text-white text-2xl font-bold">"cocompute"</h1>
                             <p class="text-[#A1A1AA] text-base font-medium">"Sign up"</p>
-                            <p class="text-[#52525B] text-[13px]">"Free signup. Tell us how you'd use cocompute and we'll be in touch."</p>
+                            <p class="text-[#52525B] text-[13px]">"Free signup. Tell us a bit about how you'll use cocompute."</p>
                         </div>
 
                         {error.map(|msg| view! {
@@ -75,7 +75,7 @@ fn BetaInvite(error: Option<String>, turnstile_site_key: Option<String>) -> impl
                             r#type="text"
                             name="gpu"
                             placeholder="e.g. RTX 3090, M2 Max, Radeon 7900..."
-                            hint="Optional — anything Ollama runs on works"
+                            hint="Optional, anything Ollama runs on works"
                         />
 
                         // Turnstile widget (renders only when site_key is configured)
@@ -105,9 +105,9 @@ fn BetaInvite(error: Option<String>, turnstile_site_key: Option<String>) -> impl
 }
 
 #[component]
-fn BetaConfirmation() -> impl IntoView {
+fn SignupConfirmation() -> impl IntoView {
     view! {
-        <Base title="cocompute — check your email">
+        <Base title="cocompute · check your email">
             <PageShell>
                 <div class="flex items-center justify-center min-h-screen">
                     <div class="w-[440px] rounded-xl bg-[#16161E] border border-[#27272A] px-10 pt-12 pb-10 flex flex-col gap-5 items-center text-center">
@@ -130,14 +130,14 @@ fn BetaConfirmation() -> impl IntoView {
     }
 }
 
-pub async fn beta(
+pub async fn signup(
     State(state): State<crate::AppState>,
-    Query(params): Query<BetaQuery>,
+    Query(params): Query<SignupQuery>,
 ) -> Html<String> {
     if params.success.unwrap_or(false) {
-        crate::web::render(BetaConfirmation())
+        crate::web::render(SignupConfirmation())
     } else {
-        crate::web::render(BetaInvite(BetaInviteProps {
+        crate::web::render(SignupPage(SignupPageProps {
             error: params.error,
             turnstile_site_key: state.turnstile_site_key.clone(),
         }))

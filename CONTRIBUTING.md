@@ -56,7 +56,7 @@ cargo run -p cocompute_orchestrator -- generate-key
 cargo run -p cocompute_host -- --orchestrator-url http://localhost:4000 --setup-token YOUR_TOKEN
 ```
 
-The orchestrator listens on `http://localhost:4000` by default. Visit it in a browser to see the landing page. The dashboard is at `/dashboard` after you sign up at `/beta`.
+The orchestrator listens on `http://localhost:4000` by default. Visit it in a browser to see the landing page. The dashboard is at `/dashboard` after you sign up at `/signup`.
 
 Email features (verification, invites) require SMTP. For local dev, run [Mailpit](https://github.com/axllent/mailpit) on the default port (1025) and the orchestrator will pick it up automatically. Without Mailpit, the orchestrator logs the verification URLs to stdout instead of sending email.
 

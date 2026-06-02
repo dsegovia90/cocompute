@@ -1,4 +1,4 @@
-//! Self-signup flow shared between POST /beta and the InviteUser CLI subcommand.
+//! Self-signup flow shared between POST /signup and the InviteUser CLI subcommand.
 //!
 //! Creates a `users` row with a verification token + an analytics-friendly
 //! `beta_invites` row, returning both the new user and the verification token
@@ -11,7 +11,7 @@ use sea_orm::{
 use crate::auth;
 use crate::db::entities::{beta_invites, users};
 
-/// Form input for a self-signup. Mirrors the fields on the /beta page.
+/// Form input for a self-signup. Mirrors the fields on the /signup page.
 pub struct SignupInput {
     pub name: String,
     pub email: String,
