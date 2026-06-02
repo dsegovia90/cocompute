@@ -1,15 +1,15 @@
 mod api_keys;
-mod beta;
 mod forgot;
 mod host_tokens;
 mod login;
 mod logout;
 mod pools;
 mod reset;
+mod signup;
 mod verify;
 
 pub use api_keys::{create_global_api_key, create_pool_api_key, rename_api_key};
-pub use beta::post_beta;
+pub use signup::post_signup;
 pub use forgot::post_forgot;
 pub use host_tokens::{create_host_token, deactivate_host, rename_host};
 pub use login::post_login;

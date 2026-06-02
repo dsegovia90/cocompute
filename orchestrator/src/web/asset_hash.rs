@@ -40,6 +40,11 @@ pub static JS_NETWORK: StaticAsset = StaticAsset {
     version: asset_hash!("network-anim.js"),
 };
 
+pub static JS_COPY: StaticAsset = StaticAsset {
+    path: "code-copy.js",
+    version: asset_hash!("code-copy.js"),
+};
+
 pub static ICONS: StaticAsset = StaticAsset {
     path: "icons.svg",
     version: asset_hash!("icons.svg"),

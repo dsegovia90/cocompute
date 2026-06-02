@@ -57,16 +57,16 @@ pub fn build_router(state: AppState, static_dir: &str, apply_rate_limits: bool) 
     let db = state.db.clone();
 
     if apply_rate_limits {
-        // Per-IP rate limit on POST /beta: ~10 requests per minute per source IP.
+        // Per-IP rate limit on POST /signup: ~10 requests per minute per source IP.
         // SmartIpKeyExtractor honors X-Forwarded-For / Forwarded headers so this
         // works correctly behind reverse proxies (Coolify, Cloudflare, nginx).
-        let beta_governor = Arc::new(
+        let signup_governor = Arc::new(
             GovernorConfigBuilder::default()
                 .per_second(6)
                 .burst_size(10)
                 .use_headers()
                 .finish()
-                .expect("invalid /beta governor config"),
+                .expect("invalid /signup governor config"),
         );
 
         // Per-IP rate limit on /v1/*: ~60 req/min per IP. Applied AFTER auth
@@ -81,19 +81,19 @@ pub fn build_router(state: AppState, static_dir: &str, apply_rate_limits: bool) 
         );
 
         // Periodic cleanup so the in-memory IP map doesn't grow unbounded.
-        let beta_limiter = beta_governor.limiter().clone();
+        let signup_limiter = signup_governor.limiter().clone();
         let v1_limiter = v1_governor.limiter().clone();
         tokio::spawn(async move {
             loop {
                 tokio::time::sleep(std::time::Duration::from_secs(60)).await;
-                beta_limiter.retain_recent();
+                signup_limiter.retain_recent();
                 v1_limiter.retain_recent();
             }
         });
 
-        let beta_rate_limited = Router::new()
-            .route("/beta", post(web::post_beta))
-            .layer(GovernorLayer::new(beta_governor));
+        let signup_rate_limited = Router::new()
+            .route("/signup", post(web::post_signup))
+            .layer(GovernorLayer::new(signup_governor));
 
         Router::new()
             .route("/v1/models", get(routes::models::list_models))
@@ -103,7 +103,7 @@ pub fn build_router(state: AppState, static_dir: &str, apply_rate_limits: bool) 
             .route_layer(GovernorLayer::new(v1_governor))
             .route_layer(middleware::from_fn_with_state(db, auth::require_api_key))
             .merge(web::router(static_dir))
-            .merge(beta_rate_limited)
+            .merge(signup_rate_limited)
             .route("/v1/node-info", get(routes::system::get_node_info))
             .route("/v1/version", get(routes::system::get_version))
             .route("/v1/update/{platform}", get(routes::system::get_update))
@@ -112,7 +112,7 @@ pub fn build_router(state: AppState, static_dir: &str, apply_rate_limits: bool) 
             .with_state(state)
     } else {
         // Test variant: same routes, no rate limiters, no background cleanup task.
-        let beta_unlimited = Router::new().route("/beta", post(web::post_beta));
+        let signup_unlimited = Router::new().route("/signup", post(web::post_signup));
 
         Router::new()
             .route("/v1/models", get(routes::models::list_models))
@@ -121,7 +121,7 @@ pub fn build_router(state: AppState, static_dir: &str, apply_rate_limits: bool) 
             .route("/v1/stats", get(routes::stats::get_stats))
             .route_layer(middleware::from_fn_with_state(db, auth::require_api_key))
             .merge(web::router(static_dir))
-            .merge(beta_unlimited)
+            .merge(signup_unlimited)
             .route("/v1/node-info", get(routes::system::get_node_info))
             .route("/v1/version", get(routes::system::get_version))
             .route("/v1/update/{platform}", get(routes::system::get_update))

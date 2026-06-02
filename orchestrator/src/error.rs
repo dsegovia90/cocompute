@@ -58,7 +58,7 @@ impl From<anyhow::Error> for AppError {
     }
 }
 
-/// Error type for web (HTML) routes — redirects or re-renders pages with error messages.
+/// Error type for web (HTML) routes, redirects or re-renders pages with error messages.
 #[derive(Debug)]
 pub enum WebError {
     /// 303 redirect (e.g., after login failure, redirect to /login?error=...)

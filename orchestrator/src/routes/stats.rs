@@ -2,7 +2,7 @@ use axum::{Json, extract::State};
 
 use crate::{AppState, error::AppError};
 
-/// GET /v1/stats — Usage statistics from metering logs.
+/// GET /v1/stats, Usage statistics from metering logs.
 pub(crate) async fn get_stats(
     State(state): State<AppState>,
 ) -> Result<Json<serde_json::Value>, AppError> {

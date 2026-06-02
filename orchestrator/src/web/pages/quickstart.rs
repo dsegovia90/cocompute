@@ -53,14 +53,14 @@ fn Quickstart(base_url: String) -> impl IntoView {
         r#"curl {base_url}/v1/chat/completions \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{{"model":"llama3.2","messages":[{{"role":"user","content":"hello"}}]}}'"#
+  -d '{{"model":"gemma4:31b","messages":[{{"role":"user","content":"hello"}}]}}'"#
     );
     let list_models_cmd = format!(
         r#"curl {base_url}/v1/models -H "Authorization: Bearer YOUR_API_KEY""#
     );
 
     view! {
-        <Base title="cocompute — quickstart">
+        <Base title="cocompute · quickstart">
             <PageShell>
                 <div class="max-w-3xl mx-auto px-6 py-16">
                     // Hero
@@ -96,7 +96,7 @@ fn Quickstart(base_url: String) -> impl IntoView {
                         <Step num="1" title="Sign up">
                             <p class="text-[#A1A1AA] text-sm">"Create a free account so you can manage your hosts and pools."</p>
                             <div>
-                                <a href="/beta" class="inline-block rounded-lg bg-indigo-500 px-5 py-2.5 text-white text-sm font-semibold hover:bg-indigo-600 transition">
+                                <a href="/signup" class="inline-block rounded-lg bg-indigo-500 px-5 py-2.5 text-white text-sm font-semibold hover:bg-indigo-600 transition">
                                     "Sign up"
                                 </a>
                             </div>
@@ -106,9 +106,7 @@ fn Quickstart(base_url: String) -> impl IntoView {
                             <p class="text-[#A1A1AA] text-sm">
                                 "From your dashboard, click "<span class="text-white font-medium">"Add Host"</span>" to get a one-line install command. Run it on any machine that runs Ollama:"
                             </p>
-                            <div class="bg-[#111118] border border-[#27272A] rounded-lg p-4 font-mono text-xs text-[#67e8f9] break-all">
-                                {host_install_cmd}
-                            </div>
+                            <CodeBlock code={host_install_cmd}/>
                             <p class="text-[#52525B] text-xs">
                                 "Works on Linux (systemd) and macOS (launchd). Runs as a background service. Anything Ollama supports works: NVIDIA, AMD, Apple Silicon, even CPU."
                             </p>
@@ -119,7 +117,7 @@ fn Quickstart(base_url: String) -> impl IntoView {
                                 "Back in the dashboard, create a pool (or pick the global pool) and add your host. As soon as your host registers, it shows up online and is ready to serve inference."
                             </p>
                             <p class="text-[#52525B] text-xs">
-                                "Pool-credit accounting tracks reciprocity. Cycles you contribute earn cycles you can spend. No tokens, no crypto."
+                                "Share with friends, your team, or the global pool. No tokens, no crypto."
                             </p>
                         </Step>
                     </section>
@@ -135,7 +133,7 @@ fn Quickstart(base_url: String) -> impl IntoView {
                         <Step num="1" title="Sign up">
                             <p class="text-[#A1A1AA] text-sm">"Create a free account."</p>
                             <div>
-                                <a href="/beta" class="inline-block rounded-lg bg-indigo-500 px-5 py-2.5 text-white text-sm font-semibold hover:bg-indigo-600 transition">
+                                <a href="/signup" class="inline-block rounded-lg bg-indigo-500 px-5 py-2.5 text-white text-sm font-semibold hover:bg-indigo-600 transition">
                                     "Sign up"
                                 </a>
                             </div>
@@ -154,17 +152,13 @@ fn Quickstart(base_url: String) -> impl IntoView {
                             <p class="text-[#A1A1AA] text-sm">
                                 "Drop your key in and call the OpenAI-compatible endpoint:"
                             </p>
-                            <div class="bg-[#111118] border border-[#27272A] rounded-lg p-4 font-mono text-xs text-[#67e8f9] break-all whitespace-pre-wrap">
-                                {consumer_curl}
-                            </div>
+                            <CodeBlock code={consumer_curl}/>
                             <p class="text-[#A1A1AA] text-sm mt-2">
                                 "Or list which models the pool has available:"
                             </p>
-                            <div class="bg-[#111118] border border-[#27272A] rounded-lg p-4 font-mono text-xs text-[#67e8f9] break-all">
-                                {list_models_cmd}
-                            </div>
+                            <CodeBlock code={list_models_cmd}/>
                             <p class="text-[#52525B] text-xs">
-                                "Works with any OpenAI-compatible client (the official OpenAI SDK, openwebui, llama.cpp clients). Just change the base URL."
+                                "Works with any client that speaks the OpenAI API spec (the official OpenAI SDK, openwebui, llama.cpp clients). Just change the base URL."
                             </p>
                         </Step>
                     </section>
@@ -173,10 +167,10 @@ fn Quickstart(base_url: String) -> impl IntoView {
                     <div class="border-t border-[#27272A] pt-8 mt-4">
                         <h2 class="text-white text-lg font-bold mb-2">"Stuck?"</h2>
                         <p class="text-[#A1A1AA] text-sm mb-4">
-                            "Open an issue on GitHub or read the source. cocompute is AGPL — every line is yours to inspect."
+                            "Open an issue on GitHub or read the source. cocompute is AGPL, every line is yours to inspect."
                         </p>
                         <div class="flex flex-wrap gap-3">
-                            <a href="/beta" class="rounded-lg bg-indigo-500 px-5 py-2.5 text-white text-sm font-semibold hover:bg-indigo-600 transition">
+                            <a href="/signup" class="rounded-lg bg-indigo-500 px-5 py-2.5 text-white text-sm font-semibold hover:bg-indigo-600 transition">
                                 "Sign up"
                             </a>
                             <a href="https://github.com/dsegovia90/cocompute" target="_blank" rel="noopener" class="rounded-lg bg-[#27272A] px-5 py-2.5 text-[#A1A1AA] text-sm font-medium hover:text-white transition flex items-center gap-2">
@@ -189,6 +183,7 @@ fn Quickstart(base_url: String) -> impl IntoView {
                         </div>
                     </div>
                 </div>
+                <script src={crate::web::asset_hash::JS_COPY.url()} defer></script>
             </PageShell>
         </Base>
     }

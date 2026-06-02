@@ -10,14 +10,16 @@ use axum::{Router, response::Html, routing::{get, post}};
 use leptos::prelude::*;
 
 // Re-exported so main.rs can wrap it in a rate-limited sub-router.
-pub use handlers::post_beta;
+pub use handlers::post_signup;
 
 pub fn router(static_dir: &str) -> Router<crate::AppState> {
     Router::new()
         .route("/", get(pages::landing::landing))
         .route("/quickstart", get(pages::quickstart::quickstart))
-        // POST /beta is mounted separately in main.rs with a per-IP rate limiter.
-        .route("/beta", get(pages::beta::beta))
+        // POST /signup is mounted separately in lib.rs with a per-IP rate limiter.
+        .route("/signup", get(pages::signup::signup))
+        // Legacy path: links shared during the beta era still point at /beta.
+        .route("/beta", get(|| async { axum::response::Redirect::permanent("/signup") }))
         .route("/login", get(pages::login::login).post(handlers::post_login))
         .route("/logout", post(handlers::post_logout))
         .route("/verify", get(pages::verify::verify_page).post(handlers::post_verify))

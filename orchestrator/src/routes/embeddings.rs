@@ -9,7 +9,7 @@ use crate::{
     proxy::{log_metering, route_to_host},
 };
 
-/// POST /v1/embeddings — OpenAI-compatible embeddings endpoint.
+/// POST /v1/embeddings, OpenAI-compatible embeddings endpoint.
 pub(crate) async fn create_embeddings(
     State(state): State<AppState>,
     Extension(api_key_id): Extension<ApiKeyId>,

@@ -55,7 +55,7 @@ pub struct OpenAIChatMessage {
     pub tool_call_id: Option<String>,
 }
 
-/// Raw deserialization type — handles both string and array content formats.
+/// Raw deserialization type, handles both string and array content formats.
 #[derive(Debug, Deserialize)]
 pub struct OpenAIChatMessageRaw {
     pub role: String,

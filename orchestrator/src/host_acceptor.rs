@@ -132,7 +132,7 @@ impl iroh::protocol::ProtocolHandler for HostAcceptor {
             let endpoint_id = connection.remote_id().to_string();
             tracing::info!("host connecting: endpoint_id={endpoint_id}");
 
-            // Read the first stream — expect a Registry request
+            // Read the first stream, expect a Registry request
             let (send, recv) = connection.accept_bi().await?;
 
             let request: Request = read_p2p(recv)
@@ -184,7 +184,7 @@ impl iroh::protocol::ProtocolHandler for HostAcceptor {
 
             // Determine user ownership and pool memberships
             let user_id = if let Some(token) = setup_token {
-                // New host with setup token — establishes user ownership
+                // New host with setup token, establishes user ownership
                 match acceptor.validate_token(&token, &host_id).await {
                     Some(uid) => Some(uid),
                     None => {
@@ -193,7 +193,7 @@ impl iroh::protocol::ProtocolHandler for HostAcceptor {
                     }
                 }
             } else {
-                // Reconnecting host — reuse the lookup above
+                // Reconnecting host, reuse the lookup above
                 existing_host.and_then(|h| h.user_id)
             };
 

@@ -77,7 +77,7 @@ enum Command {
     GenerateKey,
     /// Start the orchestrator server (default)
     Serve,
-    /// Invite a beta user — looks up their beta invite and creates a user record
+    /// Create a user account from an existing signup record (the beta_invites table)
     InviteUser {
         #[arg(long)]
         email: String,
@@ -140,7 +140,7 @@ async fn main() -> anyhow::Result<()> {
             }
         }
         None => {
-            tracing::warn!("SMTP_HOST not set — email sending disabled");
+            tracing::warn!("SMTP_HOST not set, email sending disabled");
             None
         }
     };
@@ -149,7 +149,7 @@ async fn main() -> anyhow::Result<()> {
         Some(secret) => axum_extra::extract::cookie::Key::from(secret.as_bytes()),
         None => {
             tracing::warn!(
-                "COCOMPUTE_SESSION_SECRET not set — using ephemeral key (sessions won't survive restarts)"
+                "COCOMPUTE_SESSION_SECRET not set, using ephemeral key (sessions won't survive restarts)"
             );
             axum_extra::extract::cookie::Key::generate()
         }
@@ -167,14 +167,14 @@ async fn main() -> anyhow::Result<()> {
             };
             active_model.insert(&db).await?;
 
-            println!("API key generated (save this — it won't be shown again):");
+            println!("API key generated (save this, it won't be shown again):");
             println!("{key}");
             Ok(())
         }
         Command::InviteUser { email } => {
-            // Operator override: manually create a user from a beta_invite that's
+            // Operator override: manually create a user from a signup record that's
             // already in the DB (e.g., legacy waitlist data, or a friend you want
-            // in fast). The web POST /beta path handles all normal signups now;
+            // in fast). The web POST /signup path handles all normal signups now;
             // this CLI subcommand is the escape hatch.
             use db::entities::beta_invites;
             use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
@@ -183,7 +183,7 @@ async fn main() -> anyhow::Result<()> {
                 .filter(beta_invites::Column::Email.eq(&email))
                 .one(&db)
                 .await?
-                .ok_or_else(|| anyhow::anyhow!("no beta invite found for {email}"))?;
+                .ok_or_else(|| anyhow::anyhow!("no signup record found for {email}"))?;
 
             let result = signup::create_user_and_invite(
                 &db,
@@ -226,7 +226,7 @@ async fn main() -> anyhow::Result<()> {
                     .await?;
                 println!("Invite email sent.");
             } else {
-                println!("Mailer not configured — share the verification URL manually.");
+                println!("Mailer not configured, share the verification URL manually.");
             }
 
             Ok(())
@@ -249,10 +249,10 @@ async fn main() -> anyhow::Result<()> {
             tracing::info!("accepting host connections on ALPN cocompute/0");
 
             if args.turnstile_site_key.is_some() && args.turnstile_secret_key.is_some() {
-                tracing::info!("Turnstile captcha enabled for /beta signup");
+                tracing::info!("Turnstile captcha enabled for /signup");
             } else {
                 tracing::warn!(
-                    "TURNSTILE_SITE_KEY/TURNSTILE_SECRET_KEY not set — captcha disabled (dev mode)"
+                    "TURNSTILE_SITE_KEY/TURNSTILE_SECRET_KEY not set, captcha disabled (dev mode)"
                 );
             }
 

@@ -11,7 +11,7 @@ use crate::{
 };
 
 #[derive(Deserialize)]
-pub struct BetaForm {
+pub struct SignupForm {
     name: String,
     email: String,
     role: String,
@@ -74,18 +74,18 @@ async fn verify_turnstile(
 /// Open signup. Captcha gate, then create the user immediately + send a
 /// verification email. The user clicks the link, sets a real password, and
 /// is in. No manual invite-user CLI step required.
-pub async fn post_beta(State(state): State<AppState>, Form(form): Form<BetaForm>) -> Response {
+pub async fn post_signup(State(state): State<AppState>, Form(form): Form<SignupForm>) -> Response {
     // Captcha gate: only enforce when both site_key and secret_key are set
     // (lets local dev work without Turnstile credentials).
     if let Some(secret) = state.turnstile_secret_key.as_deref() {
         let token = match form.cf_turnstile_response.as_deref() {
             Some(t) if !t.is_empty() => t,
             _ => {
-                return Redirect::to("/beta?error=Please+complete+the+captcha").into_response();
+                return Redirect::to("/signup?error=Please+complete+the+captcha").into_response();
             }
         };
         if let Err(reason) = verify_turnstile(&state.http, secret, token).await {
-            let url = format!("/beta?error={}", reason.replace(' ', "+"));
+            let url = format!("/signup?error={}", reason.replace(' ', "+"));
             return Redirect::to(&url).into_response();
         }
     }
@@ -105,23 +105,23 @@ pub async fn post_beta(State(state): State<AppState>, Form(form): Form<BetaForm>
         Ok(r) => r,
         Err(SignupError::UserAlreadyExists) => {
             tracing::info!(
-                "signup attempted with existing email {} — returning generic success",
+                "signup attempted with existing email {}, returning generic success",
                 form.email
             );
-            return Redirect::to("/beta?success=true").into_response();
+            return Redirect::to("/signup?success=true").into_response();
         }
         Err(SignupError::Db(e)) => {
             tracing::error!("signup db error: {e}");
-            return Redirect::to("/beta?error=Something+went+wrong").into_response();
+            return Redirect::to("/signup?error=Something+went+wrong").into_response();
         }
         Err(SignupError::Hash(e)) => {
             tracing::error!("signup hash error: {e}");
-            return Redirect::to("/beta?error=Something+went+wrong").into_response();
+            return Redirect::to("/signup?error=Something+went+wrong").into_response();
         }
     };
 
     // Send verification email. If sending fails, the user is created in DB
-    // but no email arrives — log loudly so the operator can manually surface
+    // but no email arrives, log loudly so the operator can manually surface
     // the verification link from a CLI/log query if needed.
     if let Some(ref mailer) = state.mailer {
         let parts = email::templates::invite_email(
@@ -144,17 +144,17 @@ pub async fn post_beta(State(state): State<AppState>, Form(form): Form<BetaForm>
             );
         }
     } else {
-        // Mailer not configured (local dev) — print the verify URL so the
+        // Mailer not configured (local dev), print the verify URL so the
         // operator can complete signup manually.
         let verify_url = format!(
             "{}/verify?token={}",
             state.base_url, signup_result.verification_token
         );
         tracing::warn!(
-            "SMTP not configured — manual verify URL for {}: {verify_url}",
+            "SMTP not configured, manual verify URL for {}: {verify_url}",
             signup_result.user.email
         );
     }
 
-    Redirect::to("/beta?success=true").into_response()
+    Redirect::to("/signup?success=true").into_response()
 }

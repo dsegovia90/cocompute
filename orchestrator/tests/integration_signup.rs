@@ -1,4 +1,4 @@
-//! Beta signup integration tests. Captcha is disabled in tests (Turnstile keys
+//! Signup integration tests. Captcha is disabled in tests (Turnstile keys
 //! are None on the test AppState), so the form submits without a token.
 
 mod common;
@@ -14,7 +14,7 @@ async fn open_signup_creates_user_and_beta_invite() {
     let app = build_test_app().await;
 
     let body = "name=Test+User&email=newcomer@example.com&role=consumer&gpu=RTX+3090";
-    let req = Request::post("/beta")
+    let req = Request::post("/signup")
         .header("content-type", "application/x-www-form-urlencoded")
         .body(Body::from(body))
         .unwrap();
@@ -74,7 +74,7 @@ async fn duplicate_signup_returns_generic_success_no_enumeration() {
     let app = build_test_app().await;
 
     let body = "name=First&email=dupe@example.com&role=consumer";
-    let req = Request::post("/beta")
+    let req = Request::post("/signup")
         .header("content-type", "application/x-www-form-urlencoded")
         .body(Body::from(body))
         .unwrap();
@@ -83,8 +83,8 @@ async fn duplicate_signup_returns_generic_success_no_enumeration() {
     let first_location = first.headers().get("location").unwrap().to_str().unwrap();
     assert!(first_location.contains("success=true"));
 
-    // Second signup with the same email — must look identical to the client.
-    let req = Request::post("/beta")
+    // Second signup with the same email, must look identical to the client.
+    let req = Request::post("/signup")
         .header("content-type", "application/x-www-form-urlencoded")
         .body(Body::from(
             "name=Second&email=dupe@example.com&role=host",

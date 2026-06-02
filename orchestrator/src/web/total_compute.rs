@@ -2,7 +2,7 @@
 //!
 //! Sums `compute_ms` across all metering_logs. The landing page is the front
 //! door, so we don't want to hit the DB on every render. A coarse TTL (default
-//! 10 minutes) is plenty — this number only grows, and a few minutes of
+//! 10 minutes) is plenty, this number only grows, and a few minutes of
 //! staleness on a marketing stat is invisible.
 
 use std::sync::Arc;
@@ -35,7 +35,7 @@ impl TotalComputeCache {
 
     /// Return the cached total compute time in milliseconds, refreshing from
     /// the DB if the cached value is missing or older than the TTL. Errors are
-    /// swallowed and return the stale value (or 0 on cold start) — the landing
+    /// swallowed and return the stale value (or 0 on cold start), the landing
     /// page must not fail on stats.
     pub async fn get(&self, db: &DatabaseConnection) -> i64 {
         let mut guard = self.inner.lock().await;
@@ -151,7 +151,7 @@ mod tests {
     // ── Cache behavior ────────────────────────────────────────────────
 
     /// Set up a tempfile-backed SQLite DB with migrations applied. Returns
-    /// (db, tempdir) — the caller must keep `tempdir` alive for the duration
+    /// (db, tempdir), the caller must keep `tempdir` alive for the duration
     /// of the test, otherwise the underlying file is removed and the
     /// connection becomes unusable on the next reopen.
     async fn test_db() -> (DatabaseConnection, TempDir) {

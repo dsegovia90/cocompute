@@ -73,7 +73,7 @@ pub async fn build_test_app() -> TestApp {
         total_compute_cache: cocompute_orchestrator::web::TotalComputeCache::new(),
     };
 
-    // build_router(_, _, false) skips the governor layers — tests don't need them
+    // build_router(_, _, false) skips the governor layers, tests don't need them
     // and adding them would couple test results to wall-clock timing.
     let router = build_router(state, "orchestrator/static", false);
 
