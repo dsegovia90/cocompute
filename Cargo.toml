@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["common", "host", "orchestrator", "stress-test"]
+members = ["common", "host", "orchestrator"]
 
 [workspace.package]
 version = "0.7.1"
