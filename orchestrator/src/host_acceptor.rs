@@ -209,7 +209,6 @@ impl iroh::protocol::ProtocolHandler for HostAcceptor {
                 .await
                 .map_err(|e| std::io::Error::other(format!("failed to send ack: {e}")))?;
 
-            // Store in HostManager keyed by host_id
             hosts.register(host_id.clone(), endpoint_id.clone(), capabilities, connection.clone(), pool_ids.clone(), user_id).await;
 
             // Handle subsequent streams (heartbeats + re-registration)
@@ -255,20 +254,21 @@ impl iroh::protocol::ProtocolHandler for HostAcceptor {
                 }
             }
 
-            // Mark host as disconnected in DB
-            if let Ok(Some(host)) = hosts::Entity::find()
-                .filter(hosts::Column::EndpointId.eq(&host_id))
-                .one(&acceptor.db)
-                .await
-            {
-                let mut active: hosts::ActiveModel = host.into();
-                active.status = Set("disconnected".to_string());
-                active.last_seen = Set(Some(chrono::Utc::now()));
-                let _ = active.update(&acceptor.db).await;
+            if hosts.unregister_if_current(&host_id, connection.stable_id()).await {
+                if let Ok(Some(host)) = hosts::Entity::find()
+                    .filter(hosts::Column::EndpointId.eq(&host_id))
+                    .one(&acceptor.db)
+                    .await
+                {
+                    let mut active: hosts::ActiveModel = host.into();
+                    active.status = Set("disconnected".to_string());
+                    active.last_seen = Set(Some(chrono::Utc::now()));
+                    let _ = active.update(&acceptor.db).await;
+                }
+                tracing::info!("host disconnected: {host_id}");
+            } else {
+                tracing::info!("stale connection for {host_id} closed; newer connection still live");
             }
-
-            tracing::info!("host disconnected: {host_id}");
-            hosts.unregister(&host_id).await;
 
             Ok(())
         })
