@@ -77,10 +77,29 @@ impl HostManager {
         }
     }
 
-    /// Remove a host (disconnected).
+    /// Remove a host unconditionally (e.g. an owner deregistering it from the dashboard).
     pub async fn unregister(&self, host_id: &str) {
         self.hosts.write().await.remove(host_id);
         tracing::info!("host unregistered: {host_id}");
+    }
+
+    /// Remove a host only if `conn_id` matches the currently-registered connection's
+    /// `stable_id`. A stale connection's teardown must not evict a newer connection
+    /// that reconnected under the same host_id. Returns true if removed.
+    pub async fn unregister_if_current(&self, host_id: &str, conn_id: usize) -> bool {
+        let mut hosts = self.hosts.write().await;
+        match hosts.get(host_id) {
+            Some(h) if h.connection.stable_id() == conn_id => {
+                hosts.remove(host_id);
+                tracing::info!("host unregistered: {host_id}");
+                true
+            }
+            Some(_) => {
+                tracing::info!("ignoring stale teardown for {host_id}: newer connection live");
+                false
+            }
+            None => false,
+        }
     }
 
     /// Find a host that has the requested model, optionally filtered by pool.
@@ -261,6 +280,32 @@ mod tests {
         // Model gone
         assert!(mgr.find_host_for_model("llama3:latest", None).await.is_none());
         assert!(mgr.available_models(None).await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn stale_teardown_does_not_evict_reconnected_host() {
+        // Same host_id and endpoint_id reconnect: the stale teardown must not evict
+        // the live registration, so the connection's stable_id must discriminate them.
+        let mgr = HostManager::new();
+
+        let (_r1, _e1, conn_old) = make_test_connection().await;
+        let (_r2, _e2, conn_new) = make_test_connection().await;
+        let old_id = conn_old.stable_id();
+        let new_id = conn_new.stable_id();
+
+        mgr.register("host-x".into(), "ep-same".into(), test_capabilities(vec!["llama3:latest"]), conn_old, vec![], None).await;
+        mgr.register("host-x".into(), "ep-same".into(), test_capabilities(vec!["llama3:latest"]), conn_new, vec![], None).await;
+
+        assert_ne!(old_id, new_id, "distinct live connections have distinct stable_ids");
+
+        assert!(
+            !mgr.unregister_if_current("host-x", old_id).await,
+            "stale teardown must not remove the host"
+        );
+        assert!(mgr.is_connected("host-x").await, "live connection must survive stale teardown");
+
+        assert!(mgr.unregister_if_current("host-x", new_id).await);
+        assert!(!mgr.is_connected("host-x").await);
     }
 
     #[tokio::test]
